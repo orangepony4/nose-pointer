@@ -20,6 +20,7 @@ ACCENT = "#315538"
 WINK_MODE = "Подмигивание"
 DWELL_MODE = "Задержка курсора"
 DEFAULT_DWELL_MS = 1200
+DWELL_PRESETS_MS = (600, 800, 1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000)
 
 TRACKING_HINTS = {
     "calibrating": "Смотрите прямо и держите оба глаза открытыми.",
@@ -30,6 +31,10 @@ TRACKING_HINTS = {
 }
 
 
+def dwell_label(milliseconds):
+    return f"{milliseconds / 1000:g}".replace(".", ",")
+
+
 class PointerApp:
     def __init__(self, root, mouse, settings, args):
         self.root = root
@@ -37,7 +42,6 @@ class PointerApp:
         self.settings = settings
         self.args = args
         self.tracker = Tracker(settings)
-        self.dwell_delay = settings.dwell_seconds or DEFAULT_DWELL_MS / 1000
         self.camera = None
         self.active = False
         self.recenter_held = False
@@ -103,7 +107,19 @@ class PointerApp:
                                        state="disabled" if args.no_clicks else "readonly")
         self.mode_picker.pack(side="left")
         self.mode_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
-        self.dwell_bar = ttk.Progressbar(click_controls, maximum=100, mode="determinate")
+        current_delay = round(settings.dwell_seconds * 1000) if settings.dwell_seconds is not None else DEFAULT_DWELL_MS
+        self.dwell_durations = {dwell_label(delay): delay / 1000
+                                for delay in sorted({*DWELL_PRESETS_MS, current_delay})}
+        self.dwell_time = tk.StringVar(value=dwell_label(current_delay))
+        self.dwell_controls = tk.Frame(click_controls, bg=BACKGROUND)
+        tk.Label(self.dwell_controls, text="Задержка, с", font=("Segoe UI", 10),
+                 bg=BACKGROUND, fg=INK).pack(side="left", padx=(0, 9))
+        self.delay_picker = ttk.Combobox(self.dwell_controls, textvariable=self.dwell_time,
+                                        values=tuple(self.dwell_durations), width=6, state="readonly")
+        self.delay_picker.pack(side="left")
+        self.delay_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
+        self.dwell_bar = ttk.Progressbar(self.dwell_controls, maximum=100, mode="determinate")
+        self.dwell_bar.pack(side="left", fill="x", expand=True, padx=(14, 0))
         self.show_click_instructions()
 
         controls = tk.Frame(frame, bg=BACKGROUND)
@@ -126,17 +142,17 @@ class PointerApp:
     def show_click_instructions(self):
         self.dwell_bar.configure(value=0)
         if self.settings.dwell_seconds is not None:
-            self.dwell_bar.pack(fill="x", pady=(8, 0))
+            self.dwell_controls.pack(fill="x", pady=(8, 0))
             self.last_gesture.set("Переместите точку, затем задержитесь для левого клика.")
         else:
-            self.dwell_bar.pack_forget()
+            self.dwell_controls.pack_forget()
             instruction = "Двигайте точку носом." if self.args.no_clicks else "Подмигните одним глазом и откройте его."
             self.last_gesture.set(instruction)
 
     def change_click_mode(self, _event=None):
         if self.active or self.args.no_clicks:
             return
-        dwell_seconds = self.dwell_delay if self.click_mode.get() == DWELL_MODE else None
+        dwell_seconds = self.dwell_durations[self.dwell_time.get()] if self.click_mode.get() == DWELL_MODE else None
         if self.settings.dwell_seconds == dwell_seconds:
             return
         self.settings = replace(self.settings, dwell_seconds=dwell_seconds)
@@ -188,6 +204,7 @@ class PointerApp:
         self.recenter_held = self.mouse.recenter_requested()
         self.active = True
         self.mode_picker.configure(state="disabled")
+        self.delay_picker.configure(state="disabled")
         self.mode.set("СИСТЕМНАЯ МЫШЬ ВКЛЮЧЕНА")
         self.pointer_button.configure(text="Пауза")
         self.recenter()
@@ -211,6 +228,7 @@ class PointerApp:
         self.active = False
         self.reset_calibration()
         self.mode_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
+        self.delay_picker.configure(state="readonly")
         self.pointer_button.configure(text="Включить мышь", state="disabled")
 
     def reset_to_preview(self, message):
