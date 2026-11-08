@@ -89,10 +89,15 @@ class Tracker:
         self.settings = settings if settings is not None else Settings()
         self.reset()
 
+    @property
+    def calibrated(self) -> bool:
+        return self._neutral is not None
+
     def reset(self) -> None:
         """Forget calibration and all tracking and gesture history."""
         self._neutral: tuple[float, float] | None = None
-        self._position = (0.5, 0.5)
+        self._origin = (0.5, 0.5)
+        self._position = self._origin
         self._last_update: float | None = None
         self._last_nose: tuple[float, float] | None = None
         self._last_click: float | None = None
@@ -112,10 +117,22 @@ class Tracker:
         self._dwell_armed = False
         self._dwell_candidate: tuple[tuple[float, float], float] | None = None
 
-    def update(self, now: float, sample: FaceSample | None) -> TrackingOutput:
-        """Process one observation at a finite, non-decreasing monotonic time."""
+    def update(
+        self, now: float, sample: FaceSample | None,
+        *, calibration_position: tuple[float, float] | None = None,
+    ) -> TrackingOutput:
+        """Process a monotonic observation, optionally anchoring completed calibration."""
         if not isfinite(now) or (self._last_update is not None and now < self._last_update):
             raise ValueError("Tracking time must be finite and non-decreasing.")
+        if calibration_position is not None and (
+            not isinstance(calibration_position, tuple)
+            or len(calibration_position) != 2
+            or not all(
+                isinstance(coordinate, (int, float)) and 0 <= coordinate <= 1
+                for coordinate in calibration_position
+            )
+        ):
+            raise ValueError("Calibration position must contain two normalized coordinates.")
 
         elapsed = now - self._last_update if self._last_update is not None else 0.0
         if elapsed > self.settings.max_sample_gap_seconds:
@@ -137,7 +154,8 @@ class Tracker:
             sample.nose_x - previous_nose[0], sample.nose_y - previous_nose[1]
         ) > self.settings.max_nose_jump:
             self._neutral = None
-            self._position = (0.5, 0.5)
+            self._origin = (0.5, 0.5)
+            self._position = self._origin
             self._break_continuity()
             return self._hold("face_jump")
 
@@ -149,8 +167,8 @@ class Tracker:
             # Dwell needs no wink gesture. Only a clear closure interrupts it.
             eyes_open = max(sample.left_blink, sample.right_blink) < self.settings.closed_threshold
 
-        if self._neutral is None:
-            return self._calibrate(now, sample, eyes_open)
+        if not self.calibrated:
+            return self._calibrate(now, sample, eyes_open, calibration_position)
         if self._wink is not None:
             return self._continue_wink(self._wink, now, sample, eyes_open)
 
@@ -185,10 +203,13 @@ class Tracker:
         return TrackingOutput(self._position, click, "tracking", 1.0, progress)
 
     def _hold(self, state: TrackingState, click: Click | None = None) -> TrackingOutput:
-        progress = 1.0 if self._neutral is not None else 0.0
+        progress = 1.0 if self.calibrated else 0.0
         return TrackingOutput(None, click, state, progress)
 
-    def _calibrate(self, now: float, sample: FaceSample, eyes_open: bool) -> TrackingOutput:
+    def _calibrate(
+        self, now: float, sample: FaceSample, eyes_open: bool,
+        calibration_position: tuple[float, float] | None,
+    ) -> TrackingOutput:
         if not eyes_open:
             self._break_continuity()
             return self._hold("calibrating")
@@ -207,6 +228,9 @@ class Tracker:
             self._calibration_x / self._calibration_count,
             self._calibration_y / self._calibration_count,
         )
+        if calibration_position is not None:
+            self._origin = calibration_position
+            self._position = calibration_position
         if self.settings.dwell_seconds is not None:
             # Smoothing or a late calibration shift must not look like new intent.
             self._dwell_origin = self._target(sample)
@@ -275,8 +299,8 @@ class Tracker:
         dx = sample.nose_x - neutral_x
         dy = sample.nose_y - neutral_y
         return (
-            self._map_axis(-dx if settings.mirror else dx, settings.range_x),
-            self._map_axis(dy, settings.range_y),
+            self._map_axis(-dx if settings.mirror else dx, settings.range_x, self._origin[0]),
+            self._map_axis(dy, settings.range_y, self._origin[1]),
         )
 
     def _move(self, target: tuple[float, float], elapsed: float) -> tuple[float, float]:
@@ -291,9 +315,10 @@ class Tracker:
             current_y + weight * (target_y - current_y),
         )
 
-    def _map_axis(self, offset: float, limit: float) -> float:
+    def _map_axis(self, offset: float, limit: float, origin: float) -> float:
         dead_zone = self.settings.dead_zone
         if abs(offset) <= dead_zone:
-            return 0.5
+            return origin
         fraction = min(1.0, (abs(offset) - dead_zone) / (limit - dead_zone))
-        return 0.5 + (0.5 if offset > 0 else -0.5) * fraction
+        # Each side of the neutral position still reaches its own desktop edge.
+        return origin + (1.0 - origin if offset > 0 else -origin) * fraction

@@ -40,6 +40,7 @@ class PointerApp:
         self.dwell_delay = settings.dwell_seconds or DEFAULT_DWELL_MS / 1000
         self.camera = None
         self.active = False
+        self.recenter_held = False
         self.last_frame = None
         self.feed_stale = False
         self.can_enable = False
@@ -109,8 +110,9 @@ class PointerApp:
         self.camera_button.pack(side="left", padx=(0, 8))
         self.pointer_button = ttk.Button(controls, text="Включить мышь", command=self.toggle_pointer, state="disabled")
         self.pointer_button.pack(side="left")
-        tk.Label(frame, text="F8  ·  Пауза", font=("Segoe UI", 10, "bold"),
-                 bg=BACKGROUND, fg=INK, anchor="w").pack(fill="x", pady=(9, 0))
+        tk.Label(frame, text="F8  ·  Пауза     F9  ·  Калибровка", font=("Segoe UI", 10, "bold"),
+                 bg=BACKGROUND, fg=INK, anchor="w", justify="left",
+                 wraplength=430).pack(fill="x", pady=(9, 0))
         privacy = "Кадры обрабатываются на этом компьютере"
         if args.no_clicks:
             privacy = "Клики отключены  ·  " + privacy
@@ -154,7 +156,7 @@ class PointerApp:
         if self.camera and self.camera.thread.is_alive():
             self.stop_camera("Камера выключается…")
             return
-        self.tracker.reset()
+        self.disable_input()
         self.last_frame = None
         self.feed_stale = False
         self.safety_notice = ""
@@ -169,10 +171,7 @@ class PointerApp:
 
     def stop_camera(self, message):
         self.camera.stop()
-        self.active = self.can_enable = False
-        self.pointer_button.configure(text="Включить мышь", state="disabled")
-        self.mode_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
-        self.dwell_bar.configure(value=0)
+        self.disable_input()
         self.camera_button.configure(text="Открыть камеру", state="disabled")
         self.mode.set("СИСТЕМНАЯ МЫШЬ ВЫКЛЮЧЕНА")
         self.status.set(message)
@@ -183,34 +182,44 @@ class PointerApp:
             return
         if not self.can_enable or self.mouse.emergency_requested():
             return
-        self.tracker.reset()
         self.safety_notice = ""
+        self.recenter_held = self.mouse.recenter_requested()
         self.active = True
         self.mode_picker.configure(state="disabled")
-        self.dwell_bar.configure(value=0)
         self.mode.set("СИСТЕМНАЯ МЫШЬ ВКЛЮЧЕНА")
         self.pointer_button.configure(text="Пауза")
-        self.status.set("Повторная калибровка. Смотрите прямо и откройте оба глаза.")
+        self.recenter()
+
+    def recenter(self):
+        self.tracker.reset()
+        self.can_enable = False
+        self.dwell_bar.configure(value=0)
+        self.status.set("Калибровка на месте. Смотрите прямо и откройте оба глаза.")
 
     def pause(self, _event=None):
         if self.active:
             self.reset_to_preview("Пауза. Чтобы снова управлять мышью, включите её кнопкой.")
 
-    def reset_to_preview(self, message):
+    def disable_input(self):
         self.active = self.can_enable = False
         self.tracker.reset()
         self.mode_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
         self.dwell_bar.configure(value=0)
+        self.pointer_button.configure(text="Включить мышь", state="disabled")
+
+    def reset_to_preview(self, message):
+        self.disable_input()
         self.mode.set("ПРОБА  ·  СИСТЕМНАЯ МЫШЬ ВЫКЛЮЧЕНА")
         self.status.set(message)
-        self.pointer_button.configure(text="Включить мышь", state="disabled")
 
     def pause_for_safety(self, message):
         self.safety_notice = message
         self.reset_to_preview(message)
 
     def update_tracking(self, now, sample):
-        result = self.tracker.update(now, sample)
+        calibrating = not self.tracker.calibrated
+        anchor = self.mouse.position() if self.active and calibrating and sample is not None else None
+        result = self.tracker.update(now, sample, calibration_position=anchor)
         if result.state == "face_jump":
             self.pause_for_safety("Лицо резко сместилось. Управление выключено.")
             return
@@ -228,7 +237,7 @@ class PointerApp:
             if self.position != result.position:
                 self.position = result.position
                 self.draw_pad()
-            if self.active:
+            if self.active and not calibrating:
                 self.mouse.move(*result.position)
         if result.click and not self.args.no_clicks:
             button = result.click
@@ -241,17 +250,24 @@ class PointerApp:
             self.last_gesture.set(f"{mode}  ·  {label} клик")
 
     def poll(self):
-        if self.active and self.mouse.emergency_requested():
-            self.pause()
+        if self.active:
+            if self.mouse.emergency_requested():
+                self.pause()
+            else:
+                held = self.mouse.recenter_requested()
+                if held and not self.recenter_held:
+                    self.recenter()
+                self.recenter_held = held
         if self.camera:
             latest, error = self.camera.snapshot()
-            if error and not self.camera.stop_event.is_set():
-                self.stop_camera(error)
+            if error is not None and not self.camera.stop_event.is_set():
+                self.stop_camera(error or "Камера завершила работу с ошибкой.")
             if not self.camera.thread.is_alive():
+                self.disable_input()
                 self.camera = None
                 self.camera_button.configure(state="normal", text="Открыть камеру")
                 self.mode.set("КАМЕРА ВЫКЛЮЧЕНА")
-                if not error:
+                if error is None:
                     self.status.set("Камера выключена. Её можно открыть снова.")
             elif latest and not self.camera.stop_event.is_set():
                 captured_at, sample = latest

@@ -31,6 +31,8 @@ class PreviewTests(unittest.TestCase):
         self.root.winfo_screenheight.return_value = 1080
         self.mouse = Mock()
         self.mouse.emergency_requested.return_value = False
+        self.mouse.recenter_requested.return_value = False
+        self.mouse.position.return_value = (0.5, 0.5)
         self.camera = Mock()
         self.camera.thread.is_alive.return_value = True
         self.camera.stop_event.is_set.return_value = False
@@ -85,6 +87,62 @@ class PreviewTests(unittest.TestCase):
         self.feed(0.62, LEFT_WINK)
         self.feed(0.77)
         self.assertIn("Левый клик", self.app.last_gesture.get())
+        self.assert_no_system_input()
+        self.mouse.position.assert_not_called()
+
+    def test_activation_uses_the_cursor_position_at_the_end_of_calibration(self):
+        self.calibrate(0)
+        self.app.toggle_pointer()
+        self.mouse.position.return_value = (0.2, 0.7)
+        for now in (0.4, 0.5, 0.6):
+            self.feed(now)
+        self.assert_no_system_input()
+        self.mouse.position.return_value = (0.3, 0.6)
+        self.feed(0.71)
+        self.assert_no_system_input()
+        self.feed(0.8)
+        self.mouse.move.assert_called_once_with(0.3, 0.6)
+
+    def test_f9_cancels_pending_wink_and_a_held_key_does_not_restart_calibration(self):
+        self.arm_system_pointer()
+        self.feed(0.80, LEFT_WINK)
+        self.feed(0.92, LEFT_WINK)
+        self.mouse.recenter_requested.return_value = True
+        self.mouse.position.return_value = (0.25, 0.8)
+        for now in (1.08, 1.18, 1.28, 1.4):
+            self.feed(now)
+        self.assert_no_system_input()
+        self.assertTrue(self.app.tracker.calibrated)
+        self.feed(1.5)
+        self.mouse.move.assert_called_once_with(0.25, 0.8)
+        self.mouse.click.assert_not_called()
+
+    def test_empty_camera_error_disarms_and_reopening_returns_to_preview(self):
+        self.arm_system_pointer()
+        self.camera.snapshot.return_value = (None, "")
+        self.camera.thread.is_alive.return_value = False
+        self.app.poll()
+        self.assertIsNone(self.app.camera)
+        self.assertFalse(self.app.active)
+        self.assertFalse(self.app.can_enable)
+        self.assertIn("ошибкой", self.app.status.get())
+
+        self.camera.thread.is_alive.return_value = True
+        with patch("nose_pointer.Camera", return_value=self.camera):
+            self.app.toggle_camera()
+        self.calibrate(1.0)
+        self.feed(1.4, MOVED_FACE)
+        self.assertTrue(self.app.can_enable)
+        self.assertFalse(self.app.active)
+        self.assert_no_system_input()
+
+    def test_cursor_read_failure_disarms_without_moving_or_clicking(self):
+        self.calibrate(0)
+        self.app.toggle_pointer()
+        self.mouse.position.side_effect = OSError("Desktop unavailable")
+        self.feed(0.4)
+        self.assertFalse(self.app.active)
+        self.assertIn("Desktop unavailable", self.app.last_gesture.get())
         self.assert_no_system_input()
 
     def test_switching_to_dwell_keeps_preview_local_and_clicks_left_only_when_enabled(self):

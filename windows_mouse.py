@@ -7,6 +7,7 @@ from ctypes import wintypes
 
 
 _VK_F8 = 0x77
+_VK_F9 = 0x78
 _KEY_IS_DOWN = 0x8000
 _ERROR_ACCESS_DENIED = 5
 _E_ACCESSDENIED = 0x80070005
@@ -111,7 +112,7 @@ def enable_dpi_awareness() -> bool:
 
 
 class WindowsMouse:
-    """Move and click in the active Windows desktop and poll F8 for pause."""
+    """Read, move and click the cursor in the active Windows desktop."""
 
     def __init__(self):
         if sys.platform != "win32":
@@ -119,6 +120,7 @@ class WindowsMouse:
 
         user32 = ctypes.WinDLL("user32", use_last_error=True)
         self._set_cursor_pos = _bind(user32, "SetCursorPos", wintypes.BOOL, ctypes.c_int, ctypes.c_int)
+        self._get_cursor_pos = _bind(user32, "GetCursorPos", wintypes.BOOL, ctypes.POINTER(wintypes.POINT))
         self._monitor_callback = ctypes.WINFUNCTYPE(
             wintypes.BOOL, wintypes.HANDLE, wintypes.HDC, ctypes.POINTER(wintypes.RECT), wintypes.LPARAM
         )
@@ -145,16 +147,31 @@ class WindowsMouse:
             raise OSError("Windows did not report an active display.")
         return rectangles
 
+    @staticmethod
+    def _desktop_bounds(rectangles):
+        lefts, tops, rights, bottoms = zip(*rectangles)
+        return min(lefts), min(tops), max(rights), max(bottoms)
+
+    def position(self) -> tuple[float, float]:
+        """Read the current cursor in the same coordinates accepted by move()."""
+        left, top, right, bottom = self._desktop_bounds(self._monitor_rectangles())
+        point = wintypes.POINT()
+        ctypes.set_last_error(0)
+        if not self._get_cursor_pos(ctypes.byref(point)):
+            raise _input_error("GetCursorPos could not read the cursor", ctypes.get_last_error())
+        x = (point.x - left) / max(1, right - left - 1)
+        y = (point.y - top) / max(1, bottom - top - 1)
+        return min(max(x, 0.0), 1.0), min(max(y, 0.0), 1.0)
+
     def move(self, x: float, y: float) -> None:
         """Map normalized coordinates to real pixels on the virtual desktop."""
         if not math.isfinite(x) or not math.isfinite(y):
             raise ValueError("Cursor coordinates must be finite.")
 
         rectangles = self._monitor_rectangles()
-        lefts, tops, rights, bottoms = zip(*rectangles)
-        left, top = min(lefts), min(tops)
-        pixel_x = left + round(min(max(x, 0.0), 1.0) * (max(rights) - left - 1))
-        pixel_y = top + round(min(max(y, 0.0), 1.0) * (max(bottoms) - top - 1))
+        left, top, right, bottom = self._desktop_bounds(rectangles)
+        pixel_x = left + round(min(max(x, 0.0), 1.0) * (right - left - 1))
+        pixel_y = top + round(min(max(y, 0.0), 1.0) * (bottom - top - 1))
 
         # Keep the point if it is visible and snap to the nearest edge in gaps.
         candidates = (
@@ -197,3 +214,7 @@ class WindowsMouse:
     def emergency_requested(self) -> bool:
         """Return whether F8 is currently held on the active desktop."""
         return bool(self._key_state(_VK_F8) & _KEY_IS_DOWN)
+
+    def recenter_requested(self) -> bool:
+        """Return whether F9 is currently held on the active desktop."""
+        return bool(self._key_state(_VK_F9) & _KEY_IS_DOWN)
