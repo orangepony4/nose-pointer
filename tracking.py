@@ -103,6 +103,12 @@ class Tracker:
         self._last_click: float | None = None
         self._break_continuity()
 
+    def reset_dwell(self) -> None:
+        """Require fresh motion before another dwell, keeping the current calibration."""
+        self._dwell_origin: tuple[float, float] | None = None
+        self._dwell_armed = False
+        self._dwell_candidate: tuple[tuple[float, float], float] | None = None
+
     def _break_continuity(self) -> None:
         self._calibration_start: float | None = None
         self._calibration_count = 0
@@ -113,9 +119,7 @@ class Tracker:
         self._wink: Click | None = None
         self._wink_start = 0.0
         self._wink_seen_again = False
-        self._dwell_origin: tuple[float, float] | None = None
-        self._dwell_armed = False
-        self._dwell_candidate: tuple[tuple[float, float], float] | None = None
+        self.reset_dwell()
 
     def update(
         self, now: float, sample: FaceSample | None,

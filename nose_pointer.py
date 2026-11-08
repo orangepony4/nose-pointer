@@ -48,6 +48,7 @@ class PointerApp:
         self.last_frame = None
         self.last_applied_position = None
         self.recovery_pending = False
+        self.right_dwell_armed_at: float | None = None
         self.feed_stale = False
         self.can_enable = False
         self.safety_notice = ""
@@ -118,9 +119,8 @@ class PointerApp:
                                         values=tuple(self.dwell_durations), width=6, state="readonly")
         self.delay_picker.pack(side="left")
         self.delay_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
-        self.dwell_bar = ttk.Progressbar(self.dwell_controls, maximum=100, mode="determinate")
-        self.dwell_bar.pack(side="left", fill="x", expand=True, padx=(14, 0))
-        self.show_click_instructions()
+        self.dwell_bar = ttk.Progressbar(self.dwell_controls, length=65, maximum=100, mode="determinate")
+        self.dwell_bar.pack(side="left", fill="x", expand=True, padx=(12, 9))
 
         controls = tk.Frame(frame, bg=BACKGROUND)
         controls.pack(fill="x")
@@ -128,6 +128,9 @@ class PointerApp:
         self.camera_button.pack(side="left", padx=(0, 8))
         self.pointer_button = ttk.Button(controls, text="Включить мышь", command=self.toggle_pointer, state="disabled")
         self.pointer_button.pack(side="left")
+        self.right_dwell_button = ttk.Button(self.dwell_controls, command=self.toggle_right_dwell)
+        self.right_dwell_button.bind("<ButtonRelease-3>", self.cancel_right_dwell)
+        self.show_click_instructions()
         tk.Label(frame, text="F8  ·  Пауза     F9  ·  Калибровка", font=("Segoe UI", 10, "bold"),
                  bg=BACKGROUND, fg=INK, anchor="w", justify="left",
                  wraplength=430).pack(fill="x", pady=(9, 0))
@@ -143,11 +146,51 @@ class PointerApp:
         self.dwell_bar.configure(value=0)
         if self.settings.dwell_seconds is not None:
             self.dwell_controls.pack(fill="x", pady=(8, 0))
+            if not self.args.no_clicks:
+                self.right_dwell_button.pack(side="right")
             self.last_gesture.set("Переместите точку, затем задержитесь для левого клика.")
         else:
             self.dwell_controls.pack_forget()
+            self.right_dwell_button.pack_forget()
             instruction = "Двигайте точку носом." if self.args.no_clicks else "Подмигните одним глазом и откройте его."
             self.last_gesture.set(instruction)
+        self.refresh_right_dwell_button()
+
+    def refresh_right_dwell_button(self):
+        armed = self.right_dwell_armed_at is not None
+        available = self.settings.dwell_seconds is not None and not self.args.no_clicks
+        self.right_dwell_button.configure(
+            text="Отменить" if armed else "Правый клик",
+            state="normal" if available and (self.can_enable or armed) else "disabled",
+        )
+
+    def clear_right_dwell(self, message="Правый клик отменён."):
+        if self.right_dwell_armed_at is None:
+            return
+        self.right_dwell_armed_at = None
+        self.refresh_right_dwell_button()
+        if message is not None:
+            self.last_gesture.set(message)
+
+    def toggle_right_dwell(self):
+        if self.right_dwell_armed_at is not None:
+            self.cancel_right_dwell()
+            return
+        if not self.can_enable or self.settings.dwell_seconds is None or self.args.no_clicks:
+            return
+        self.right_dwell_armed_at = monotonic()
+        self.refresh_right_dwell_button()
+        self.last_gesture.set("Следующий клик — правый. Переместите указатель к цели.")
+        self.tracker.reset_dwell()
+        self.dwell_bar.configure(value=0)
+
+    def cancel_right_dwell(self, _event=None):
+        # A dwell on the cancel control arrives as a right-button release.
+        self.clear_right_dwell(message=None)
+        self.tracker.reset_dwell()
+        self.dwell_bar.configure(value=0)
+        self.last_gesture.set("Правый клик отменён.")
+        return "break"
 
     def change_click_mode(self, _event=None):
         if self.active or self.args.no_clicks:
@@ -158,6 +201,7 @@ class PointerApp:
         self.settings = replace(self.settings, dwell_seconds=dwell_seconds)
         self.tracker = Tracker(self.settings)
         self.can_enable = False
+        self.clear_right_dwell()
         self.pointer_button.configure(state="disabled")
         self.show_click_instructions()
 
@@ -219,10 +263,14 @@ class PointerApp:
         self.last_applied_position = None
         self.recovery_pending = False
         self.dwell_bar.configure(value=0)
+        self.clear_right_dwell()
+        self.refresh_right_dwell_button()
 
     def pause(self, _event=None):
         if self.active:
             self.reset_to_preview("Пауза. Чтобы снова управлять мышью, включите её кнопкой.")
+        elif self.right_dwell_armed_at is not None:
+            self.toggle_right_dwell()
 
     def disable_input(self):
         self.active = False
@@ -244,9 +292,14 @@ class PointerApp:
         calibrating = not self.tracker.calibrated
         anchor = self.mouse.position() if self.active and calibrating and sample is not None else None
         result = self.tracker.update(now, sample, calibration_position=anchor)
+        if self.right_dwell_armed_at is not None and now < self.right_dwell_armed_at:
+            # Frames already captured when the button was pressed cannot arm the next click.
+            self.tracker.reset_dwell()
         if result.state == "face_jump":
             self.pause_for_safety("Лицо резко сместилось. Управление выключено.")
             return
+        if result.state == "paused":
+            self.clear_right_dwell()
         if self.active and not calibrating:
             if result.state == "paused":
                 self.recovery_pending = True
@@ -256,7 +309,10 @@ class PointerApp:
                     self.recenter()
                     return
 
-        self.can_enable = result.state == "tracking"
+        can_enable = result.state == "tracking"
+        if self.can_enable != can_enable:
+            self.can_enable = can_enable
+            self.refresh_right_dwell_button()
         if not self.active:
             self.pointer_button.configure(state="normal" if self.can_enable else "disabled")
         hint = TRACKING_HINTS[result.state]
@@ -274,7 +330,10 @@ class PointerApp:
                 self.last_applied_position = anchor if calibrating else self.mouse.move(*result.position)
         if result.click and not self.args.no_clicks:
             button = result.click
-            if self.args.swap_buttons and self.settings.dwell_seconds is None:
+            if self.settings.dwell_seconds is not None and self.right_dwell_armed_at is not None:
+                button = "right"
+                self.clear_right_dwell(message=None)
+            elif self.args.swap_buttons and self.settings.dwell_seconds is None:
                 button = "right" if button == "left" else "left"
             if self.active:
                 self.mouse.click(button)
@@ -316,9 +375,11 @@ class PointerApp:
                             self.update_tracking(captured_at, None)
                     elif self.last_frame != captured_at:
                         self.feed_stale = False
-                        if (self.active and self.tracker.calibrated and self.last_frame is not None
+                        if (self.last_frame is not None
                                 and captured_at - self.last_frame > self.settings.max_sample_gap_seconds):
-                            self.recovery_pending = True
+                            self.clear_right_dwell()
+                            if self.active and self.tracker.calibrated:
+                                self.recovery_pending = True
                         self.last_frame = captured_at
                         self.update_tracking(captured_at, sample)
                 except OSError as error:

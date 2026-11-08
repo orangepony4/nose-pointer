@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import camera
 from nose_pointer import DWELL_MODE, WINK_MODE, PointerApp
@@ -47,7 +47,7 @@ class PreviewTests(unittest.TestCase):
         pad = Mock()
         pad.winfo_width.return_value = 200
         pad.winfo_height.return_value = 150
-        self.buttons = [Mock(), Mock()]
+        self.buttons = [Mock(), Mock(), Mock()]
         with (
             patch.multiple("nose_pointer.tk", Frame=Mock(), Label=Mock(),
                            Canvas=Mock(return_value=pad), StringVar=StringValue),
@@ -81,6 +81,11 @@ class PreviewTests(unittest.TestCase):
     def assert_no_system_input(self):
         self.mouse.move.assert_not_called()
         self.mouse.click.assert_not_called()
+
+    def select_quick_dwell(self):
+        self.app.click_mode.set(DWELL_MODE)
+        self.app.dwell_time.set("0,6")
+        self.app.change_click_mode()
 
     def test_preview_tracks_and_recognizes_a_wink_without_system_input(self):
         self.app.toggle_pointer()
@@ -205,6 +210,88 @@ class PreviewTests(unittest.TestCase):
         self.app.click_mode.set(DWELL_MODE)
         self.app.change_click_mode()
         self.assertEqual(self.app.settings.dwell_seconds, 0.8)
+
+    def test_preview_right_dwell_discards_a_partial_timer_and_requires_fresh_motion(self):
+        self.select_quick_dwell()
+        self.calibrate(0)
+        self.feed(0.4, MOVED_FACE)
+        self.feed(0.6, MOVED_FACE)
+        self.clock.return_value = 0.7
+        self.app.toggle_right_dwell()
+        self.assertIsNotNone(self.app.right_dwell_armed_at)
+        self.feed(0.65, OPEN_FACE, wall_time=0.72)
+        for time in (0.8, 0.98, 1.16, 1.34, 1.52):
+            self.feed(time, MOVED_FACE)
+        self.assertIsNotNone(self.app.right_dwell_armed_at)
+        self.assert_no_system_input()
+
+        for time in (1.7, 1.88, 2.06, 2.24, 2.32):
+            self.feed(time, OPEN_FACE)
+        self.assertIn("Правый клик", self.app.last_gesture.get())
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.assert_no_system_input()
+
+    def test_active_right_dwell_is_consumed_once_then_default_left_click_resumes(self):
+        self.select_quick_dwell()
+        self.arm_system_pointer()
+        self.app.toggle_right_dwell()
+        self.feed(0.8)
+        for time in (0.9, 1.08, 1.26, 1.44, 1.52, 1.7):
+            self.feed(time, MOVED_FACE)
+        self.mouse.click.assert_called_once_with("right")
+        self.assertIsNone(self.app.right_dwell_armed_at)
+
+        for time in (1.8, 1.98, 2.16, 2.34, 2.42):
+            self.feed(time)
+        self.assertEqual(self.mouse.click.call_args_list, [call("right"), call("left")])
+
+    def test_right_dwell_is_cleared_by_explicit_cancel_loss_gap_and_pause(self):
+        self.select_quick_dwell()
+        self.arm_system_pointer()
+        self.app.toggle_right_dwell()
+        self.app.toggle_right_dwell()
+        self.assertIsNone(self.app.right_dwell_armed_at)
+
+        self.app.toggle_right_dwell()
+        self.feed(0.8)
+        self.feed(0.91, None)
+        self.assertIsNone(self.app.right_dwell_armed_at)
+
+        for time in (1.03, 1.13, 1.23):
+            self.feed(time)
+        self.app.toggle_right_dwell()
+        self.assertIsNotNone(self.app.right_dwell_armed_at)
+        self.feed(1.61)
+        self.assertIsNone(self.app.right_dwell_armed_at)
+
+        self.feed(1.8)
+        self.app.toggle_right_dwell()
+        self.assertIsNotNone(self.app.right_dwell_armed_at)
+        self.mouse.emergency_requested.return_value = True
+        self.feed(1.9)
+        self.assertFalse(self.app.active)
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.mouse.click.assert_not_called()
+
+    def test_right_button_release_cannot_arm_and_enable_clears_a_preview_choice(self):
+        self.calibrate(0)
+        self.app.toggle_right_dwell()
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.select_quick_dwell()
+        self.calibrate(0.4)
+
+        self.app.toggle_right_dwell()
+        self.assertIsNotNone(self.app.right_dwell_armed_at)
+        self.assertEqual(self.app.cancel_right_dwell(), "break")
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.app.cancel_right_dwell()
+        self.assertIsNone(self.app.right_dwell_armed_at)
+
+        self.app.toggle_right_dwell()
+        self.app.toggle_pointer()
+        self.assertTrue(self.app.active)
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.assert_no_system_input()
 
     def test_duplicate_frames_and_stale_reopen_cannot_send_input(self):
         self.arm_system_pointer()
