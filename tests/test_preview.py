@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import camera
-from nose_pointer import PointerApp
+from nose_pointer import DWELL_MODE, PointerApp
 from tracking import FaceSample, Settings
 
 
@@ -26,6 +26,9 @@ class StringValue:
 class PreviewTests(unittest.TestCase):
     def setUp(self):
         self.root = Mock()
+        self.root.winfo_fpixels.return_value = 96
+        self.root.winfo_screenwidth.return_value = 1920
+        self.root.winfo_screenheight.return_value = 1080
         self.mouse = Mock()
         self.mouse.emergency_requested.return_value = False
         self.camera = Mock()
@@ -40,7 +43,8 @@ class PreviewTests(unittest.TestCase):
         with (
             patch.multiple("nose_pointer.tk", Frame=Mock(), Label=Mock(),
                            Canvas=Mock(return_value=pad), StringVar=StringValue),
-            patch.multiple("nose_pointer.ttk", Style=Mock(), Button=Mock(side_effect=self.buttons)),
+            patch.multiple("nose_pointer.ttk", Style=Mock(), Button=Mock(side_effect=self.buttons),
+                           Combobox=Mock(), Progressbar=Mock()),
         ):
             self.app = PointerApp(self.root, self.mouse,
                                   Settings(calibration_seconds=0.3, smoothing_seconds=0),
@@ -82,6 +86,33 @@ class PreviewTests(unittest.TestCase):
         self.feed(0.77)
         self.assertIn("Левый клик", self.app.last_gesture.get())
         self.assert_no_system_input()
+
+    def test_switching_to_dwell_keeps_preview_local_and_clicks_left_only_when_enabled(self):
+        self.calibrate(0)
+        self.app.args.swap_buttons = True
+        self.app.click_mode.set(DWELL_MODE)
+        self.app.change_click_mode()
+        self.assertFalse(self.app.can_enable)
+        self.app.toggle_pointer()
+        self.assertFalse(self.app.active)
+        self.calibrate(0.4)
+        self.feed(0.80, MOVED_FACE)
+        for time in (1.00, 1.20, 1.40, 1.60, 1.80, 2.02):
+            self.feed(time, MOVED_FACE)
+        self.app.dwell_bar.configure.assert_called_with(value=100)
+        self.assertIn("Левый клик", self.app.last_gesture.get())
+        self.assert_no_system_input()
+
+        self.app.toggle_pointer()
+        self.assertTrue(self.app.active)
+        self.app.mode_picker.configure.assert_called_with(state="disabled")
+        self.calibrate(2.1)
+        for time in (2.5, 2.7, 2.9, 3.1, 3.3, 3.5, 3.72, 3.9):
+            self.feed(time, MOVED_FACE)
+        self.mouse.click.assert_called_once_with("left")
+        self.app.pause()
+        self.app.mode_picker.configure.assert_called_with(state="readonly")
+        self.app.dwell_bar.configure.assert_called_with(value=0)
 
     def test_duplicate_frames_and_stale_reopen_cannot_send_input(self):
         self.arm_system_pointer()

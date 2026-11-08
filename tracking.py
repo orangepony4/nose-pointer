@@ -1,7 +1,7 @@
-"""Map normalized face samples to pointer positions and wink clicks."""
+"""Map normalized face samples to pointer positions and optional clicks."""
 
 from dataclasses import dataclass
-from math import expm1, hypot, isfinite
+from math import dist, expm1, hypot, isfinite
 from typing import Literal
 
 Click = Literal["left", "right"]
@@ -24,6 +24,8 @@ class Settings:
     rearm_seconds: float = 0.15
     max_sample_gap_seconds: float = 0.25
     max_nose_jump: float = 0.20
+    dwell_seconds: float | None = None
+    dwell_radius: float = 0.015
 
     def __post_init__(self) -> None:
         ranges = (self.range_x, self.range_y, self.dead_zone)
@@ -35,6 +37,12 @@ class Settings:
             raise ValueError("Eye thresholds must be ordered between zero and one.")
         if not isfinite(self.max_nose_jump) or self.max_nose_jump <= 0:
             raise ValueError("The maximum nose jump must be finite and positive.")
+        if self.dwell_seconds is not None and (
+            not isfinite(self.dwell_seconds) or self.dwell_seconds <= 0
+        ):
+            raise ValueError("Dwell duration must be finite and positive.")
+        if not 0 < self.dwell_radius <= 0.25:
+            raise ValueError("Dwell radius must be greater than zero and at most 0.25.")
 
         timings = (
             self.smoothing_seconds, self.calibration_seconds, self.wink_min_seconds,
@@ -67,6 +75,7 @@ class TrackingOutput:
     click: Click | None
     state: TrackingState
     calibration_progress: float
+    dwell_progress: float = 0.0
 
     @property
     def calibrated(self) -> bool:
@@ -74,7 +83,7 @@ class TrackingOutput:
 
 
 class Tracker:
-    """Calibrate a neutral point, smooth motion, and recognize isolated winks."""
+    """Calibrate a neutral point, smooth motion, and detect clicks."""
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings if settings is not None else Settings()
@@ -99,6 +108,9 @@ class Tracker:
         self._wink: Click | None = None
         self._wink_start = 0.0
         self._wink_seen_again = False
+        self._dwell_origin: tuple[float, float] | None = None
+        self._dwell_armed = False
+        self._dwell_candidate: tuple[tuple[float, float], float] | None = None
 
     def update(self, now: float, sample: FaceSample | None) -> TrackingOutput:
         """Process one observation at a finite, non-decreasing monotonic time."""
@@ -138,9 +150,12 @@ class Tracker:
         if self._wink is not None:
             return self._continue_wink(self._wink, now, sample, eyes_open)
 
+        dwell_seconds = self.settings.dwell_seconds
         if not eyes_open:
             self._open_since = None
-            if self._armed and left_open != right_open:
+            if dwell_seconds is not None:
+                self._dwell_candidate = None
+            elif self._armed and left_open != right_open:
                 side: Click = "right" if left_open else "left"
                 wink_score = sample.right_blink if left_open else sample.left_blink
                 if wink_score < self.settings.closed_threshold:
@@ -158,8 +173,13 @@ class Tracker:
             if now < self._open_since + self.settings.rearm_seconds:
                 return self._hold("rearming")
             self._armed = True
-        self._position = self._move(sample, elapsed)
-        return TrackingOutput(self._position, None, "tracking", 1.0)
+
+        target = self._target(sample)
+        self._position = self._move(target, elapsed)
+        if dwell_seconds is None:
+            return TrackingOutput(self._position, None, "tracking", 1.0)
+        click, progress = self._advance_dwell(now, target, dwell_seconds)
+        return TrackingOutput(self._position, click, "tracking", 1.0, progress)
 
     def _hold(self, state: TrackingState, click: Click | None = None) -> TrackingOutput:
         progress = 1.0 if self._neutral is not None else 0.0
@@ -184,6 +204,9 @@ class Tracker:
             self._calibration_x / self._calibration_count,
             self._calibration_y / self._calibration_count,
         )
+        if self.settings.dwell_seconds is not None:
+            # Smoothing or a late calibration shift must not look like new intent.
+            self._dwell_origin = self._target(sample)
         self._armed = True
         return TrackingOutput(self._position, None, "tracking", 1.0)
 
@@ -214,19 +237,52 @@ class Tracker:
             self._wink_seen_again = True
         return self._hold("wink")
 
-    def _move(self, sample: FaceSample, elapsed: float) -> tuple[float, float]:
+    def _advance_dwell(
+        self, now: float, target: tuple[float, float], duration: float
+    ) -> tuple[Click | None, float]:
+        radius = self.settings.dwell_radius
+        if self._dwell_origin is None:
+            self._dwell_origin = target
+            return None, 0.0
+        if not self._dwell_armed:
+            if dist(target, self._dwell_origin) < 2 * radius:
+                return None, 0.0
+            self._dwell_armed = True
+
+        position = self._position
+        settled = dist(position, target) <= radius
+        if settled and self._dwell_candidate is not None:
+            anchor, started_at = self._dwell_candidate
+            # Compare with the fixed anchor to catch cumulative drift.
+            if dist(target, anchor) <= radius and dist(position, anchor) <= radius:
+                if now < started_at + duration:
+                    return None, (now - started_at) / duration
+                self._dwell_origin = position
+                self._dwell_armed = False
+                self._dwell_candidate = None
+                return "left", 1.0
+
+        self._dwell_candidate = (target, now) if settled else None
+        return None, 0.0
+
+    def _target(self, sample: FaceSample) -> tuple[float, float]:
         settings = self.settings
         assert self._neutral is not None
         neutral_x, neutral_y = self._neutral
         dx = sample.nose_x - neutral_x
         dy = sample.nose_y - neutral_y
-        target_x = self._map_axis(-dx if settings.mirror else dx, settings.range_x)
-        target_y = self._map_axis(dy, settings.range_y)
+        return (
+            self._map_axis(-dx if settings.mirror else dx, settings.range_x),
+            self._map_axis(dy, settings.range_y),
+        )
 
-        if settings.smoothing_seconds == 0:
-            return target_x, target_y
-        weight = -expm1(-elapsed / settings.smoothing_seconds)
+    def _move(self, target: tuple[float, float], elapsed: float) -> tuple[float, float]:
+        smoothing = self.settings.smoothing_seconds
+        if smoothing == 0:
+            return target
+        weight = -expm1(-elapsed / smoothing)
         current_x, current_y = self._position
+        target_x, target_y = target
         return (
             current_x + weight * (target_x - current_x),
             current_y + weight * (target_y - current_y),
