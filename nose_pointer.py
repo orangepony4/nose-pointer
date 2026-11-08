@@ -42,6 +42,8 @@ class PointerApp:
         self.active = False
         self.recenter_held = False
         self.last_frame = None
+        self.last_applied_position = None
+        self.recovery_pending = False
         self.feed_stale = False
         self.can_enable = False
         self.safety_notice = ""
@@ -191,20 +193,24 @@ class PointerApp:
         self.recenter()
 
     def recenter(self):
+        self.reset_calibration()
+        self.status.set("Калибровка на месте. Смотрите прямо и откройте оба глаза.")
+
+    def reset_calibration(self):
         self.tracker.reset()
         self.can_enable = False
+        self.last_applied_position = None
+        self.recovery_pending = False
         self.dwell_bar.configure(value=0)
-        self.status.set("Калибровка на месте. Смотрите прямо и откройте оба глаза.")
 
     def pause(self, _event=None):
         if self.active:
             self.reset_to_preview("Пауза. Чтобы снова управлять мышью, включите её кнопкой.")
 
     def disable_input(self):
-        self.active = self.can_enable = False
-        self.tracker.reset()
+        self.active = False
+        self.reset_calibration()
         self.mode_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
-        self.dwell_bar.configure(value=0)
         self.pointer_button.configure(text="Включить мышь", state="disabled")
 
     def reset_to_preview(self, message):
@@ -223,6 +229,15 @@ class PointerApp:
         if result.state == "face_jump":
             self.pause_for_safety("Лицо резко сместилось. Управление выключено.")
             return
+        if self.active and not calibrating:
+            if result.state == "paused":
+                self.recovery_pending = True
+            elif self.recovery_pending and (result.position is not None or result.click):
+                self.recovery_pending = False
+                if self.mouse.position() != self.last_applied_position:
+                    self.recenter()
+                    return
+
         self.can_enable = result.state == "tracking"
         if not self.active:
             self.pointer_button.configure(state="normal" if self.can_enable else "disabled")
@@ -237,8 +252,8 @@ class PointerApp:
             if self.position != result.position:
                 self.position = result.position
                 self.draw_pad()
-            if self.active and not calibrating:
-                self.mouse.move(*result.position)
+            if self.active:
+                self.last_applied_position = anchor if calibrating else self.mouse.move(*result.position)
         if result.click and not self.args.no_clicks:
             button = result.click
             if self.args.swap_buttons and self.settings.dwell_seconds is None:
@@ -283,6 +298,9 @@ class PointerApp:
                             self.update_tracking(captured_at, None)
                     elif self.last_frame != captured_at:
                         self.feed_stale = False
+                        if (self.active and self.tracker.calibrated and self.last_frame is not None
+                                and captured_at - self.last_frame > self.settings.max_sample_gap_seconds):
+                            self.recovery_pending = True
                         self.last_frame = captured_at
                         self.update_tracking(captured_at, sample)
                 except OSError as error:

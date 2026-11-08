@@ -41,8 +41,21 @@ class WindowsMouseTests(unittest.TestCase):
                 position = self.mouse.position()
                 self.assertEqual(position, expected)
                 self.mouse._set_cursor_pos.assert_not_called()
-                self.mouse.move(*position)
+                self.assertEqual(self.mouse.move(*position), expected)
                 self.mouse._set_cursor_pos.assert_called_once_with(*pixels)
+
+    def test_move_returns_the_rounded_or_snapped_pixel(self):
+        rounded = self.mouse.move(0.12345, 0.45678)
+        self.mouse._set_cursor_pos.assert_called_once_with(-885, 384)
+        self.fake_cursor(-885, 384)
+        self.assertEqual(rounded, self.mouse.position())
+
+        self.mouse._set_cursor_pos.reset_mock()
+        # (-3, 1000) lies below the left display and just left of the right one.
+        snapped = self.mouse.move(1277 / 3199, 1200 / 1279)
+        self.mouse._set_cursor_pos.assert_called_once_with(0, 1000)
+        self.fake_cursor(0, 1000)
+        self.assertEqual(snapped, self.mouse.position())
 
     def test_position_clamps_outside_reported_bounds_and_handles_one_pixel(self):
         self.fake_cursor(-2000, 1200)

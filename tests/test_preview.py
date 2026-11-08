@@ -33,6 +33,12 @@ class PreviewTests(unittest.TestCase):
         self.mouse.emergency_requested.return_value = False
         self.mouse.recenter_requested.return_value = False
         self.mouse.position.return_value = (0.5, 0.5)
+
+        def move_cursor(x, y):
+            self.mouse.position.return_value = (x, y)
+            return x, y
+
+        self.mouse.move.side_effect = move_cursor
         self.camera = Mock()
         self.camera.thread.is_alive.return_value = True
         self.camera.stop_event.is_set.return_value = False
@@ -196,6 +202,61 @@ class PreviewTests(unittest.TestCase):
         self.feed(1.84, LEFT_WINK)
         self.feed(2.00)
         self.mouse.click.assert_called_once_with("left")
+
+    def test_recovery_after_loss_keeps_an_externally_moved_cursor_in_place(self):
+        self.arm_system_pointer()
+        self.feed(0.80, MOVED_FACE)
+        self.mouse.reset_mock()
+        self.feed(0.90, None)
+        self.mouse.position.return_value = (0.17, 0.78)
+        self.feed(1.00)
+        self.assert_no_system_input()
+        self.mouse.position.assert_not_called()
+        self.feed(1.16)
+        self.assert_no_system_input()
+        self.mouse.position.assert_called_once()
+        self.assertTrue(self.app.active)
+        self.assertFalse(self.app.tracker.calibrated)
+
+        for now in (1.2, 1.3, 1.4):
+            self.feed(now)
+        self.mouse.position.return_value = (0.22, 0.72)
+        self.feed(1.51)
+        self.assertTrue(self.app.tracker.calibrated)
+        self.assert_no_system_input()
+        self.feed(1.6)
+        self.mouse.move.assert_called_once_with(0.22, 0.72)
+        self.mouse.click.assert_not_called()
+
+    def test_frame_gap_without_a_paused_poll_also_checks_cursor(self):
+        self.arm_system_pointer()
+        self.feed(0.80, MOVED_FACE)
+        self.mouse.reset_mock()
+        self.mouse.position.return_value = (0.17, 0.78)
+        self.feed(1.10)
+        self.assertTrue(self.app.tracker.calibrated)
+        self.assert_no_system_input()
+        self.feed(1.26)
+        self.assertFalse(self.app.tracker.calibrated)
+        self.assert_no_system_input()
+
+    def test_recovery_is_immediate_at_the_last_applied_pixel(self):
+        self.arm_system_pointer()
+        applied = (0.29, 0.67)
+        self.mouse.move.side_effect = None
+        self.mouse.move.return_value = applied
+        self.feed(0.80, MOVED_FACE)
+        self.assertNotEqual(self.app.position, applied)
+        self.mouse.position.return_value = applied
+        self.mouse.reset_mock()
+        self.feed(0.90, None)
+        self.feed(1.00)
+        self.assert_no_system_input()
+        self.feed(1.16)
+        self.assertTrue(self.app.tracker.calibrated)
+        self.mouse.position.assert_called_once()
+        self.mouse.move.assert_called_once()
+        self.mouse.click.assert_not_called()
 
     def test_emergency_pause_precedes_a_valid_wink_reopen(self):
         self.arm_system_pointer()

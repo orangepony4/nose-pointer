@@ -152,24 +152,30 @@ class WindowsMouse:
         lefts, tops, rights, bottoms = zip(*rectangles)
         return min(lefts), min(tops), max(rights), max(bottoms)
 
+    @staticmethod
+    def _normalize_position(x, y, bounds):
+        left, top, right, bottom = bounds
+        x = (x - left) / max(1, right - left - 1)
+        y = (y - top) / max(1, bottom - top - 1)
+        return min(max(x, 0.0), 1.0), min(max(y, 0.0), 1.0)
+
     def position(self) -> tuple[float, float]:
         """Read the current cursor in the same coordinates accepted by move()."""
-        left, top, right, bottom = self._desktop_bounds(self._monitor_rectangles())
+        bounds = self._desktop_bounds(self._monitor_rectangles())
         point = wintypes.POINT()
         ctypes.set_last_error(0)
         if not self._get_cursor_pos(ctypes.byref(point)):
             raise _input_error("GetCursorPos could not read the cursor", ctypes.get_last_error())
-        x = (point.x - left) / max(1, right - left - 1)
-        y = (point.y - top) / max(1, bottom - top - 1)
-        return min(max(x, 0.0), 1.0), min(max(y, 0.0), 1.0)
+        return self._normalize_position(point.x, point.y, bounds)
 
-    def move(self, x: float, y: float) -> None:
-        """Map normalized coordinates to real pixels on the virtual desktop."""
+    def move(self, x: float, y: float) -> tuple[float, float]:
+        """Move to a visible pixel and return its normalized coordinates."""
         if not math.isfinite(x) or not math.isfinite(y):
             raise ValueError("Cursor coordinates must be finite.")
 
         rectangles = self._monitor_rectangles()
-        left, top, right, bottom = self._desktop_bounds(rectangles)
+        bounds = self._desktop_bounds(rectangles)
+        left, top, right, bottom = bounds
         pixel_x = left + round(min(max(x, 0.0), 1.0) * (right - left - 1))
         pixel_y = top + round(min(max(y, 0.0), 1.0) * (bottom - top - 1))
 
@@ -185,6 +191,7 @@ class WindowsMouse:
         ctypes.set_last_error(0)
         if not self._set_cursor_pos(target_x, target_y):
             raise _input_error("SetCursorPos could not move the cursor", ctypes.get_last_error())
+        return self._normalize_position(target_x, target_y, bounds)
 
     def click(self, button: str) -> None:
         """Send a down/up pair without leaving a deliberately held button."""
