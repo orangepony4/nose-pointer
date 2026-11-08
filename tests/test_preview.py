@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import Mock, call, patch
 
 import camera
-from nose_pointer import DWELL_MODE, WINK_MODE, PointerApp
+from nose_pointer import DWELL_MODE, MOTION_MODE, WINK_MODE, PointerApp
 from tracking import FaceSample, Settings
 
 
@@ -293,6 +293,32 @@ class PreviewTests(unittest.TestCase):
         self.assertIsNone(self.app.right_dwell_armed_at)
         self.assert_no_system_input()
 
+    def test_selecting_motion_only_tracks_closed_eyes_without_clicking(self):
+        self.app.click_mode.set(MOTION_MODE)
+        self.app.change_click_mode()
+        self.assertTrue(self.app.settings.motion_only)
+        closed = FaceSample(0.5, 0.5, 0.95, 0.95)
+        moved = FaceSample(0.45, 0.54, 0.95, 0.95)
+        for time in (0, 0.1, 0.2, 0.31):
+            self.feed(time, closed)
+        self.assertTrue(self.app.can_enable)
+        self.assert_no_system_input()
+        self.app.toggle_pointer()
+        for time in (0.4, 0.5, 0.6, 0.71):
+            self.feed(time, closed)
+        self.feed(0.8, moved)
+        self.mouse.move.assert_called_once()
+        self.assertGreater(self.mouse.move.call_args.args[0], 0.5)
+        self.mouse.click.assert_not_called()
+
+        self.app.pause()
+        self.app.click_mode.set(WINK_MODE)
+        self.app.change_click_mode()
+        self.assertFalse(self.app.settings.motion_only)
+        for time in (0.9, 1, 1.1, 1.21):
+            self.feed(time, closed)
+        self.assertFalse(self.app.can_enable)
+
     def test_duplicate_frames_and_stale_reopen_cannot_send_input(self):
         self.arm_system_pointer()
         self.feed(0.8, MOVED_FACE)
@@ -368,8 +394,64 @@ class PreviewTests(unittest.TestCase):
         self.feed(1.00)
         self.assert_no_system_input()
         self.feed(1.16)
+        self.assertTrue(self.app.active)
         self.assertTrue(self.app.tracker.calibrated)
         self.mouse.position.assert_called_once()
+        self.mouse.move.assert_called_once()
+        self.mouse.click.assert_not_called()
+
+    def test_repeated_missing_or_stale_snapshot_expires_from_capture_time(self):
+        self.arm_system_pointer()
+        self.feed(0.75, wall_time=0.95)
+        self.mouse.reset_mock()
+        self.feed(0.9, None, wall_time=1.0)
+        self.feed(0.9, None, wall_time=5.74)
+        self.assertTrue(self.app.active)
+        self.assert_no_system_input()
+
+        self.feed(0.9, None, wall_time=5.75)
+        self.assertFalse(self.app.active)
+        self.assertFalse(self.app.can_enable)
+        self.assertIs(self.app.camera, self.camera)
+        self.assertIn("Лицо долго не было видно", self.app.status.get())
+        self.assert_no_system_input()
+
+    def test_fresh_face_after_skipped_polls_does_not_renew_expired_input(self):
+        self.arm_system_pointer()
+        self.feed(0.75)
+        self.mouse.reset_mock()
+        replacement = FaceSample(0.76, 0.5, 0.1, 0.1)
+        self.feed(6.0, replacement)
+        self.assertFalse(self.app.active)
+        self.assert_no_system_input()
+
+        for now in (6.1, 6.2, 6.31):
+            self.feed(now, replacement)
+        self.assertTrue(self.app.can_enable)
+        self.assertFalse(self.app.active)
+        self.assert_no_system_input()
+
+    def test_active_start_expires_even_without_a_first_camera_sample(self):
+        self.calibrate(0)
+        self.app.toggle_pointer()
+        self.assertTrue(self.app.active)
+        self.camera.snapshot.return_value = (None, None)
+        self.clock.return_value = 5.32
+        self.app.poll()
+        self.assertFalse(self.app.active)
+        self.assertIs(self.app.camera, self.camera)
+        self.assert_no_system_input()
+
+    def test_fresh_samples_with_closed_eyes_do_not_expire_input(self):
+        self.arm_system_pointer()
+        closed_eyes = FaceSample(0.5, 0.5, 0.9, 0.9)
+        for index in range(4, 35):
+            self.feed(index / 5, closed_eyes)
+        self.assertTrue(self.app.active)
+        self.assert_no_system_input()
+        self.feed(6.85)
+        self.feed(7.02)
+        self.assertTrue(self.app.active)
         self.mouse.move.assert_called_once()
         self.mouse.click.assert_not_called()
 

@@ -26,6 +26,7 @@ class Settings:
     max_nose_jump: float = 0.20
     dwell_seconds: float | None = None
     dwell_radius: float = 0.02
+    motion_only: bool = False
 
     def __post_init__(self) -> None:
         ranges = (self.range_x, self.range_y, self.dead_zone)
@@ -41,6 +42,8 @@ class Settings:
             not isfinite(self.dwell_seconds) or self.dwell_seconds <= 0
         ):
             raise ValueError("Dwell duration must be finite and positive.")
+        if self.motion_only and self.dwell_seconds is not None:
+            raise ValueError("Motion-only mode cannot use dwell clicks.")
         if not 0 < self.dwell_radius <= 0.25:
             raise ValueError("Dwell radius must be greater than zero and at most 0.25.")
 
@@ -165,7 +168,7 @@ class Tracker:
 
         left_open = sample.left_blink <= self.settings.open_threshold
         right_open = sample.right_blink <= self.settings.open_threshold
-        eyes_open = left_open and right_open
+        eyes_open = self.settings.motion_only or (left_open and right_open)
         dwell_seconds = self.settings.dwell_seconds
         if dwell_seconds is not None:
             # Dwell needs no wink gesture. Only a clear closure interrupts it.

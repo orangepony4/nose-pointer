@@ -19,8 +19,10 @@ EDGE = "#dedbd1"
 ACCENT = "#315538"
 WINK_MODE = "Подмигивание"
 DWELL_MODE = "Задержка курсора"
+MOTION_MODE = "Только движение"
 DEFAULT_DWELL_MS = 1200
 DWELL_PRESETS_MS = (600, 800, 1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000)
+FACE_LOSS_GRACE_SECONDS = 5.0
 
 TRACKING_HINTS = {
     "calibrating": "Смотрите прямо и держите оба глаза открытыми.",
@@ -28,6 +30,10 @@ TRACKING_HINTS = {
     "wink": "Подмигивание. Точка ждёт, пока глаз откроется.",
     "rearming": "Держите оба глаза открытыми, чтобы продолжить.",
     "paused": "Лицо потеряно или кадры задерживаются. Ввод приостановлен.",
+}
+MOTION_ONLY_HINTS = {
+    "calibrating": "Смотрите прямо и держите лицо в кадре.",
+    "rearming": "Держите лицо в кадре, чтобы продолжить.",
 }
 
 
@@ -46,6 +52,7 @@ class PointerApp:
         self.active = False
         self.recenter_held = False
         self.last_frame = None
+        self.last_active_face_at: float | None = None
         self.last_applied_position = None
         self.recovery_pending = False
         self.right_dwell_armed_at: float | None = None
@@ -101,10 +108,13 @@ class PointerApp:
         click_row.pack(fill="x")
         tk.Label(click_row, text="Режим клика", font=("Segoe UI", 10),
                  bg=BACKGROUND, fg=INK).pack(side="left", padx=(0, 9))
-        selected_mode = DWELL_MODE if settings.dwell_seconds is not None else WINK_MODE
-        self.click_mode = tk.StringVar(value="Клики отключены" if args.no_clicks else selected_mode)
+        if settings.motion_only or args.no_clicks:
+            selected_mode = MOTION_MODE
+        else:
+            selected_mode = DWELL_MODE if settings.dwell_seconds is not None else WINK_MODE
+        self.click_mode = tk.StringVar(value=selected_mode)
         self.mode_picker = ttk.Combobox(click_row, textvariable=self.click_mode,
-                                       values=(WINK_MODE, DWELL_MODE), width=18,
+                                       values=(WINK_MODE, DWELL_MODE, MOTION_MODE), width=18,
                                        state="disabled" if args.no_clicks else "readonly")
         self.mode_picker.pack(side="left")
         self.mode_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
@@ -152,7 +162,9 @@ class PointerApp:
         else:
             self.dwell_controls.pack_forget()
             self.right_dwell_button.pack_forget()
-            instruction = "Двигайте точку носом." if self.args.no_clicks else "Подмигните одним глазом и откройте его."
+            instruction = ("Двигайте точку носом. Клики отключены."
+                           if self.settings.motion_only or self.args.no_clicks
+                           else "Подмигните одним глазом и откройте его.")
             self.last_gesture.set(instruction)
         self.refresh_right_dwell_button()
 
@@ -195,10 +207,12 @@ class PointerApp:
     def change_click_mode(self, _event=None):
         if self.active or self.args.no_clicks:
             return
-        dwell_seconds = self.dwell_durations[self.dwell_time.get()] if self.click_mode.get() == DWELL_MODE else None
-        if self.settings.dwell_seconds == dwell_seconds:
+        mode = self.click_mode.get()
+        motion_only = mode == MOTION_MODE
+        dwell_seconds = self.dwell_durations[self.dwell_time.get()] if mode == DWELL_MODE else None
+        if self.settings.dwell_seconds == dwell_seconds and self.settings.motion_only == motion_only:
             return
-        self.settings = replace(self.settings, dwell_seconds=dwell_seconds)
+        self.settings = replace(self.settings, dwell_seconds=dwell_seconds, motion_only=motion_only)
         self.tracker = Tracker(self.settings)
         self.can_enable = False
         self.clear_right_dwell()
@@ -246,6 +260,7 @@ class PointerApp:
             return
         self.safety_notice = ""
         self.recenter_held = self.mouse.recenter_requested()
+        self.last_active_face_at = monotonic()
         self.active = True
         self.mode_picker.configure(state="disabled")
         self.delay_picker.configure(state="disabled")
@@ -255,7 +270,8 @@ class PointerApp:
 
     def recenter(self):
         self.reset_calibration()
-        self.status.set("Калибровка на месте. Смотрите прямо и откройте оба глаза.")
+        self.status.set("Калибровка на месте. Смотрите прямо." if self.settings.motion_only
+                        else "Калибровка на месте. Смотрите прямо и откройте оба глаза.")
 
     def reset_calibration(self):
         self.tracker.reset()
@@ -274,6 +290,7 @@ class PointerApp:
 
     def disable_input(self):
         self.active = False
+        self.last_active_face_at = None
         self.reset_calibration()
         self.mode_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
         self.delay_picker.configure(state="readonly")
@@ -300,6 +317,9 @@ class PointerApp:
             return
         if result.state == "paused":
             self.clear_right_dwell()
+        elif self.active and self.last_active_face_at is not None:
+            # Camera inference may finish after activation for a frame captured before it.
+            self.last_active_face_at = max(self.last_active_face_at, now)
         if self.active and not calibrating:
             if result.state == "paused":
                 self.recovery_pending = True
@@ -316,6 +336,8 @@ class PointerApp:
         if not self.active:
             self.pointer_button.configure(state="normal" if self.can_enable else "disabled")
         hint = TRACKING_HINTS[result.state]
+        if self.settings.motion_only:
+            hint = MOTION_ONLY_HINTS.get(result.state, hint)
         if self.safety_notice:
             hint = f"{self.safety_notice}\n{hint}"
         if self.status.get() != hint:
@@ -328,7 +350,7 @@ class PointerApp:
                 self.draw_pad()
             if self.active:
                 self.last_applied_position = anchor if calibrating else self.mouse.move(*result.position)
-        if result.click and not self.args.no_clicks:
+        if result.click and not (self.args.no_clicks or self.settings.motion_only):
             button = result.click
             if self.settings.dwell_seconds is not None and self.right_dwell_armed_at is not None:
                 button = "right"
@@ -352,6 +374,10 @@ class PointerApp:
                 self.recenter_held = held
         if self.camera:
             latest, error = self.camera.snapshot()
+            now = monotonic()
+            if (self.active and self.last_active_face_at is not None
+                    and now >= self.last_active_face_at + FACE_LOSS_GRACE_SECONDS):
+                self.pause_for_safety("Лицо долго не было видно. Управление выключено.")
             if error is not None and not self.camera.stop_event.is_set():
                 self.stop_camera(error or "Камера завершила работу с ошибкой.")
             if not self.camera.thread.is_alive():
@@ -363,7 +389,6 @@ class PointerApp:
                     self.status.set("Камера выключена. Её можно открыть снова.")
             elif latest and not self.camera.stop_event.is_set():
                 captured_at, sample = latest
-                now = monotonic()
                 try:
                     if sample is AMBIGUOUS_FACE:
                         if self.last_frame != captured_at:
@@ -429,7 +454,8 @@ def main():
 
         settings = Settings(mirror=not args.no_mirror, range_x=args.range_x,
                             range_y=args.range_y, wink_min_seconds=args.wink_ms / 1000,
-                            dwell_seconds=args.dwell_ms / 1000 if args.dwell_ms is not None else None)
+                            dwell_seconds=args.dwell_ms / 1000 if args.dwell_ms is not None else None,
+                            motion_only=args.no_clicks)
         enable_dpi_awareness()
         mouse = WindowsMouse()
         root = tk.Tk()
