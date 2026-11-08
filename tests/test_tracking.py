@@ -42,9 +42,9 @@ class TrackingTests(unittest.TestCase):
         self.assertFalse(interrupted.calibrated)
         self.assertIsNone(interrupted.click)
         for now in [0.20, 0.31, 0.41]:
-            self.assertFalse(tracker.update(now, face(0.7, 0.6)).calibrated)
-        self.assert_centered(tracker.update(0.51, face(0.7, 0.6)))
-        self.assert_centered(tracker.update(0.55, face(0.7, 0.6)))
+            self.assertFalse(tracker.update(now, face(0.35, 0.4)).calibrated)
+        self.assert_centered(tracker.update(0.51, face(0.35, 0.4)))
+        self.assert_centered(tracker.update(0.55, face(0.35, 0.4)))
 
     def test_dead_zone_horizontal_mirror_and_screen_clamping(self):
         mirrored = self.ready_tracker(mirror=True)
@@ -60,23 +60,24 @@ class TrackingTests(unittest.TestCase):
         self.assertGreater(direct[1], 0.5)
         self.assertAlmostEqual(reflected[1], direct[1])
 
-        self.assertEqual(mirrored.update(0.12, face(0.99, 0.99)).position, (0, 1))
-        self.assertEqual(mirrored.update(0.16, face(0.01, 0.01)).position, (1, 0))
-        self.assertEqual(straight.update(0.12, face(0.99, 0.99)).position, (1, 1))
+        self.assertEqual(mirrored.update(0.12, face(0.63, 0.63)).position, (0, 1))
+        mirrored.update(0.16, face(0.51, 0.51))
+        self.assertEqual(mirrored.update(0.20, face(0.37, 0.39)).position, (1, 0))
+        self.assertEqual(straight.update(0.12, face(0.63, 0.63)).position, (1, 1))
 
     def test_smoothing_moves_progressively_towards_the_target(self):
         tracker = self.ready_tracker(mirror=False, smoothing_seconds=0.10)
-        positions = [tracker.update(now, face(0.75)).position for now in (0.04, 0.08, 0.16)]
+        positions = [tracker.update(now, face(0.63)).position for now in (0.04, 0.08, 0.16)]
         self.assertTrue(0.5 < positions[0][0] < positions[1][0] < positions[2][0] < 1)
         for _, y in positions:
             self.assertAlmostEqual(y, 0.5)
 
     def test_single_eye_wink_clicks_once_on_reopen_and_holds_the_pointer(self):
         for button, closed, mirror in [
-            ("left", face(0.7, 0.6, left=0.9), True),
-            ("right", face(0.7, 0.6, right=0.9), True),
-            ("left", face(0.7, 0.6, left=0.9), False),
-            ("right", face(0.7, 0.6, right=0.9), False),
+            ("left", face(0.65, 0.6, left=0.9), True),
+            ("right", face(0.65, 0.6, right=0.9), True),
+            ("left", face(0.65, 0.6, left=0.9), False),
+            ("right", face(0.65, 0.6, right=0.9), False),
         ]:
             with self.subTest(button=button, mirror=mirror):
                 tracker = self.ready_tracker(mirror=mirror)
@@ -84,7 +85,7 @@ class TrackingTests(unittest.TestCase):
                     result = tracker.update(now, closed)
                     self.assertIsNone(result.click)
                     self.assertIsNone(result.position)
-                opened = tracker.update(0.37, face(0.7, 0.6))
+                opened = tracker.update(0.37, face(0.65, 0.6))
                 self.assertEqual(opened.click, button)
                 self.assertIsNone(opened.position)
                 for now in (0.44, 0.56, 0.68, 0.83):
@@ -168,6 +169,54 @@ class TrackingTests(unittest.TestCase):
             self.assertFalse(tracker.update(now, face(0.75, 0.25)).calibrated)
         self.assert_centered(tracker.update(0.81, face(0.75, 0.25)))
         self.assert_centered(tracker.update(0.85, face(0.75, 0.25)))
+
+    def test_face_jump_cancels_wink_and_requires_new_neutral(self):
+        tracker = Tracker(Settings(calibration_seconds=0.3, smoothing_seconds=0))
+        for now in (0.0, 0.1, 0.2):
+            self.assertFalse(tracker.update(now, face()).calibrated)
+        self.assert_centered(tracker.update(0.31, face()))
+        self.assertEqual(tracker.update(0.40, face(left=0.9)).state, "wink")
+        self.assertEqual(tracker.update(0.52, face(left=0.9)).state, "wink")
+
+        handoff = tracker.update(0.66, face(0.76))
+        self.assertEqual(handoff.state, "face_jump")
+        self.assertEqual(handoff.calibration_progress, 0)
+        self.assertIsNone(handoff.position)
+        self.assertIsNone(handoff.click)
+        for now in (0.70, 0.81, 0.92):
+            result = tracker.update(now, face(0.76))
+            self.assertEqual(result.state, "calibrating")
+            self.assertIsNone(result.position)
+            self.assertIsNone(result.click)
+        self.assert_centered(tracker.update(1.01, face(0.76)))
+        self.assert_centered(tracker.update(1.05, face(0.76)))
+
+    def test_face_jump_uses_euclidean_displacement_and_configured_threshold(self):
+        tracker = self.ready_tracker()
+        self.assertEqual(tracker.update(0.08, face(0.65, 0.65)).state, "face_jump")
+        self.assertEqual(tracker.update(0.16, face()).state, "face_jump")
+
+        tolerant = self.ready_tracker(max_nose_jump=0.25)
+        self.assertEqual(tolerant.update(0.08, face(0.75)).state, "tracking")
+        for invalid in (0, -0.1, math.inf, math.nan):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    Settings(max_nose_jump=invalid)
+
+    def test_missing_invalid_or_stale_samples_break_the_jump_comparison(self):
+        for gap in ("missing", "invalid", "stale"):
+            with self.subTest(gap=gap):
+                tracker = self.ready_tracker()
+                if gap == "missing":
+                    tracker.update(0.10, None)
+                if gap == "invalid":
+                    tracker.update(0.10, face(left=math.nan))
+                now = 0.31 if gap == "stale" else 0.15
+                result = tracker.update(now, face(0.76))
+                self.assertEqual(result.state, "rearming")
+                self.assertTrue(result.calibrated)
+                self.assertIsNone(result.position)
+                self.assertIsNone(result.click)
 
     def test_reset_accepts_a_new_neutral_and_new_timeline(self):
         tracker = self.ready_tracker(mirror=False)

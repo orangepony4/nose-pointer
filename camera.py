@@ -18,6 +18,7 @@ MODEL_URL = (
 MODEL_SHA256 = "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
 MODEL_SIZE = 3_758_596
 NOSE_TIP = 1
+AMBIGUOUS_FACE = object()
 
 
 def model_is_ready():
@@ -50,12 +51,14 @@ def create_landmarker(mp):
     return vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
         base_options=mp.tasks.BaseOptions(model_asset_path=str(MODEL_PATH)),
         running_mode=vision.RunningMode.VIDEO,
-        num_faces=1,
+        num_faces=2,
         output_face_blendshapes=True,
     ))
 
 
 def extract_sample(result):
+    if len(result.face_landmarks) > 1 or len(result.face_blendshapes) > 1:
+        return AMBIGUOUS_FACE
     if not result.face_landmarks or not result.face_blendshapes:
         return None
     nose = result.face_landmarks[0][NOSE_TIP]
@@ -71,6 +74,7 @@ class Camera:
         self.stop_event = Event()
         self.lock = Lock()
         self.latest = None
+        self.pending_pause = None
         self.error = None
         self.thread = Thread(target=self.run, name="webcam", daemon=True)
 
@@ -82,7 +86,18 @@ class Camera:
 
     def snapshot(self):
         with self.lock:
+            if self.pending_pause is not None:
+                pause, self.pending_pause = self.pending_pause, None
+                return pause, self.error
             return self.latest, self.error
+
+    def publish(self, captured_at, sample):
+        with self.lock:
+            self.latest = captured_at, sample
+            # A fast next frame must not hide a pause from the UI. Ambiguity
+            # disables input, so it takes precedence over a missing face.
+            if sample is AMBIGUOUS_FACE or (sample is None and self.pending_pause is None):
+                self.pending_pause = self.latest
 
     def run(self):
         capture = None
@@ -110,8 +125,7 @@ class Camera:
                     ok, frame = capture.read()
                     captured_at = monotonic()
                     if not ok:
-                        with self.lock:
-                            self.latest = captured_at, None
+                        self.publish(captured_at, None)
                         failures += 1
                         if failures >= 20:
                             raise RuntimeError("Камера перестала передавать кадры.")
@@ -123,8 +137,7 @@ class Camera:
                     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
                     sample = extract_sample(landmarker.detect_for_video(image, timestamp))
-                    with self.lock:
-                        self.latest = captured_at, sample
+                    self.publish(captured_at, sample)
         except Exception as error:
             with self.lock:
                 self.error = str(error)

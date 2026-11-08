@@ -1,11 +1,11 @@
 """Map normalized face samples to pointer positions and wink clicks."""
 
 from dataclasses import dataclass
-from math import expm1, isfinite
+from math import expm1, hypot, isfinite
 from typing import Literal
 
 Click = Literal["left", "right"]
-TrackingState = Literal["calibrating", "tracking", "wink", "rearming", "paused"]
+TrackingState = Literal["calibrating", "tracking", "wink", "rearming", "paused", "face_jump"]
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,7 @@ class Settings:
     click_cooldown_seconds: float = 0.45
     rearm_seconds: float = 0.15
     max_sample_gap_seconds: float = 0.25
+    max_nose_jump: float = 0.20
 
     def __post_init__(self) -> None:
         ranges = (self.range_x, self.range_y, self.dead_zone)
@@ -32,6 +33,8 @@ class Settings:
             raise ValueError("The dead zone must be smaller than both pointer ranges.")
         if not 0 <= self.open_threshold < self.closed_threshold <= 1:
             raise ValueError("Eye thresholds must be ordered between zero and one.")
+        if not isfinite(self.max_nose_jump) or self.max_nose_jump <= 0:
+            raise ValueError("The maximum nose jump must be finite and positive.")
 
         timings = (
             self.smoothing_seconds, self.calibration_seconds, self.wink_min_seconds,
@@ -82,6 +85,7 @@ class Tracker:
         self._neutral: tuple[float, float] | None = None
         self._position = (0.5, 0.5)
         self._last_update: float | None = None
+        self._last_nose: tuple[float, float] | None = None
         self._last_click: float | None = None
         self._break_continuity()
 
@@ -104,6 +108,7 @@ class Tracker:
         elapsed = now - self._last_update if self._last_update is not None else 0.0
         if elapsed > self.settings.max_sample_gap_seconds:
             self._break_continuity()
+            self._last_nose = None
             elapsed = 0.0
         self._last_update = now
 
@@ -111,7 +116,18 @@ class Tracker:
             sample.nose_x, sample.nose_y, sample.left_blink, sample.right_blink
         )):
             self._break_continuity()
+            self._last_nose = None
             return self._hold("paused")
+
+        previous_nose = self._last_nose
+        self._last_nose = (sample.nose_x, sample.nose_y)
+        if previous_nose is not None and hypot(
+            sample.nose_x - previous_nose[0], sample.nose_y - previous_nose[1]
+        ) > self.settings.max_nose_jump:
+            self._neutral = None
+            self._position = (0.5, 0.5)
+            self._break_continuity()
+            return self._hold("face_jump")
 
         left_open = sample.left_blink <= self.settings.open_threshold
         right_open = sample.right_blink <= self.settings.open_threshold

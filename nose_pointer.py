@@ -6,7 +6,7 @@ import tkinter as tk
 from time import monotonic
 from tkinter import ttk
 
-from camera import Camera, check_inference, download_model
+from camera import AMBIGUOUS_FACE, Camera, check_inference, download_model
 from tracking import Settings, Tracker
 
 
@@ -38,6 +38,7 @@ class PointerApp:
         self.last_frame = None
         self.feed_stale = False
         self.can_enable = False
+        self.safety_notice = ""
         self.position = (0.5, 0.5)
 
         root.title("Nose Pointer")
@@ -104,6 +105,7 @@ class PointerApp:
         self.tracker.reset()
         self.last_frame = None
         self.feed_stale = False
+        self.safety_notice = ""
         self.position = (0.5, 0.5)
         self.draw_pad()
         self.last_gesture.set("Тестовое поле  ·  Подмигните одним глазом и откройте его")
@@ -128,26 +130,38 @@ class PointerApp:
         if not self.can_enable or self.mouse.emergency_requested():
             return
         self.tracker.reset()
+        self.safety_notice = ""
         self.active = True
         self.mode.set("СИСТЕМНАЯ МЫШЬ ВКЛЮЧЕНА")
         self.pointer_button.configure(text="Пауза")
         self.status.set("Повторная калибровка. Смотрите прямо и откройте оба глаза.")
 
     def pause(self, _event=None):
-        if not self.active:
-            return
+        if self.active:
+            self.reset_to_preview("Пауза. Чтобы снова управлять мышью, включите её кнопкой.")
+
+    def reset_to_preview(self, message):
         self.active = self.can_enable = False
         self.tracker.reset()
         self.mode.set("ПРОБА  ·  СИСТЕМНАЯ МЫШЬ ВЫКЛЮЧЕНА")
-        self.status.set("Пауза. Чтобы снова управлять мышью, включите её кнопкой.")
+        self.status.set(message)
         self.pointer_button.configure(text="Включить мышь", state="disabled")
+
+    def pause_for_safety(self, message):
+        self.safety_notice = message
+        self.reset_to_preview(message)
 
     def update_tracking(self, now, sample):
         result = self.tracker.update(now, sample)
+        if result.state == "face_jump":
+            self.pause_for_safety("Лицо резко сместилось. Управление выключено.")
+            return
         self.can_enable = result.state == "tracking"
         if not self.active:
             self.pointer_button.configure(state="normal" if self.can_enable else "disabled")
         hint = TRACKING_HINTS[result.state]
+        if self.safety_notice:
+            hint = f"{self.safety_notice}\n{hint}"
         if self.status.get() != hint:
             self.status.set(hint)
         if result.position is not None:
@@ -183,7 +197,11 @@ class PointerApp:
                 captured_at, sample = latest
                 now = monotonic()
                 try:
-                    if now - captured_at > self.settings.max_sample_gap_seconds:
+                    if sample is AMBIGUOUS_FACE:
+                        if self.last_frame != captured_at:
+                            self.last_frame = captured_at
+                            self.pause_for_safety("В кадре несколько лиц. Управление выключено.")
+                    elif now - captured_at > self.settings.max_sample_gap_seconds:
                         if not self.feed_stale:
                             self.feed_stale = True
                             self.update_tracking(captured_at, None)
