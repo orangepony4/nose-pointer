@@ -25,7 +25,7 @@ class Settings:
     max_sample_gap_seconds: float = 0.25
     max_nose_jump: float = 0.20
     dwell_seconds: float | None = None
-    dwell_radius: float = 0.015
+    dwell_radius: float = 0.02
 
     def __post_init__(self) -> None:
         ranges = (self.range_x, self.range_y, self.dead_zone)
@@ -144,13 +144,16 @@ class Tracker:
         left_open = sample.left_blink <= self.settings.open_threshold
         right_open = sample.right_blink <= self.settings.open_threshold
         eyes_open = left_open and right_open
+        dwell_seconds = self.settings.dwell_seconds
+        if dwell_seconds is not None:
+            # Dwell needs no wink gesture. Only a clear closure interrupts it.
+            eyes_open = max(sample.left_blink, sample.right_blink) < self.settings.closed_threshold
 
         if self._neutral is None:
             return self._calibrate(now, sample, eyes_open)
         if self._wink is not None:
             return self._continue_wink(self._wink, now, sample, eyes_open)
 
-        dwell_seconds = self.settings.dwell_seconds
         if not eyes_open:
             self._open_since = None
             if dwell_seconds is not None:

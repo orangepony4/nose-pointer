@@ -97,6 +97,14 @@ class DwellTests(unittest.TestCase):
                 self.hold_without_click(tracker, face(0.54), 0.98, 0.99, 1.15, 1.32, 1.49)
                 self.assertEqual(tracker.update(1.61, face(0.54)).click, "left")
 
+    def test_uncertain_eye_scores_do_not_block_dwell_calibration_or_click(self):
+        tracker = self.tracker()
+        baseline = face(left=0.42, right=0.38)
+        target = face(0.54, left=0.55, right=0.39)
+        self.assertTrue(tracker.update(0.0, baseline).calibrated)
+        self.hold_without_click(tracker, target, 0.10, 0.28, 0.46, 0.62)
+        self.assertEqual(tracker.update(0.72, target).click, "left")
+
     def test_loss_stale_frames_jump_and_reset_require_new_motion(self):
         for interruption in ("loss", "invalid", "stale", "jump", "reset"):
             with self.subTest(interruption=interruption):
