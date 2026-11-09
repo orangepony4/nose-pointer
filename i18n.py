@@ -19,6 +19,9 @@ MESSAGES = {
     "dwell_delay": ("Delay (s)", "Задержка, с"),
     "open_camera": ("Open camera", "Открыть камеру"),
     "stop_camera": ("Turn off camera", "Выключить камеру"),
+    "camera_index": ("Camera number", "Номер камеры"),
+    "camera_index_invalid": ("Enter a whole camera number, such as 0 or 1.",
+                             "Введите целый номер камеры, например 0 или 1."),
     "enable_mouse": ("Enable mouse", "Включить мышь"),
     "pause": ("Pause", "Пауза"),
     "right_click": ("Right click", "Правый клик"),
@@ -87,8 +90,8 @@ MESSAGES = {
     "camera_error": ("Camera stopped with an error.", "Камера завершила работу с ошибкой."),
     "camera_error_detail": ("Camera error. {detail}", "Ошибка камеры. {detail}"),
     "camera_unavailable": (
-        "Could not open the camera. Check the camera index, permissions and other apps.",
-        "Камеру открыть не удалось. Проверьте разрешения, индекс и другие приложения.",
+        "Could not open the camera. Try another camera number or check permissions and other apps.",
+        "Камеру открыть не удалось. Попробуйте другой номер камеры или проверьте разрешения и другие приложения.",
     ),
     "camera_unavailable_brief": ("Could not open the camera.", "Камеру открыть не удалось."),
     "camera_no_frames": ("The camera stopped sending frames.", "Камера перестала передавать кадры."),
@@ -122,7 +125,8 @@ MESSAGES = {
     "cli_dwell": ("start in dwell mode with a 600–5000 ms delay", "открыть режим задержки с интервалом от 600 до 5000 мс"),
     "cli_dwell_invalid": ("Dwell delay must be between 600 and 5000 ms.", "Задержка клика должна быть от 600 до 5000 мс."),
     "cli_platform": ("System input is supported on Windows.", "Системный ввод поддерживается в Windows."),
-    "cli_camera_invalid": ("Camera index must be nonnegative.", "Индекс камеры не может быть отрицательным."),
+    "cli_camera_invalid": ("Camera index must be between 0 and 2147483647.",
+                           "Индекс камеры должен быть от 0 до 2147483647."),
 }
 
 

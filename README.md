@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.8.1)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.8.1.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.8.1)
+**[Download the Windows ZIP (v0.9.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.0.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.0)
 
 ## English
 
@@ -30,6 +30,8 @@ The app remembers the sensitivity preset, click mode and dwell delay you choose.
 2. Look straight ahead while the app calibrates. The status shows calibration progress. Keep both eyes open in the click modes. Try moving the dot, then hold a wink for about a quarter of a second and open the eye. The app shows the recognized click below the practice area.
 3. Choose your click mode and sensitivity while still in practice mode. Select **Enable mouse** (Включить мышь) when ready. Calibration uses the current cursor position as its starting point, and the pointer can reach across multiple monitors.
 4. Press **F8** from any window to pause. You can also press **Esc** in Nose Pointer, select **Pause** (Пауза), or close the app. **Turn off camera** (Выключить камеру) stops capture.
+
+If the default camera fails to open or points at the wrong device, turn it off if needed, change **Camera number** to `1` or another number, and select **Open camera** again. The app opens only the camera you choose. The number applies to the current session.
 
 On shorter windows, scroll the practice area and settings above the camera and mouse buttons. Use **Page Up** or **Page Down** to scroll with the keyboard. Pressing **Tab** brings each focused control into view. If control stops for safety or an error occurs, a brief reason stays near the buttons while you scroll.
 
@@ -57,7 +59,7 @@ If Windows reports an unexpected cursor position as the app is about to click, N
 uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-ms 300
 ```
 
-- `--camera 1` selects another webcam. The default index is `0`.
+- `--camera 1` sets the initial **Camera number**. The default is `0`.
 - `--range-x` and `--range-y` set the fraction of the frame you move from the neutral pose to reach a screen edge. Smaller values increase sensitivity. A custom pair appears as **Custom** (Своя) in the sensitivity menu.
 - `--wink-ms` sets the minimum wink duration. The default is 220 ms.
 - `--dwell-ms 1600` starts in dwell mode. The supported range is 600–5000 ms.
@@ -83,7 +85,7 @@ The tests use synthetic face samples and mocked system input. The model check pr
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.8.1)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.8.1.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.8.1)
+**[Скачать ZIP для Windows (v0.9.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.0.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.0)
 
 ### Запуск на Windows
 
@@ -107,6 +109,8 @@ uv run --locked nose_pointer.py
 2. Смотрите прямо во время калибровки. В строке состояния видно, сколько уже пройдено. В режимах клика держите оба глаза открытыми. Попробуйте подвигать точку, затем подмигните одним глазом примерно на четверть секунды и откройте его. Под тестовым полем появится сторона распознанного клика.
 3. Подберите режим клика и чувствительность в режиме пробы. Нажмите **Включить мышь**, когда будете готовы. Текущая позиция указателя станет опорной точкой. Управление охватывает и дополнительные мониторы.
 4. Для паузы нажмите **F8** в любом окне. Также можно нажать **Esc** в приложении, выбрать **Пауза** или закрыть окно. Кнопка **Выключить камеру** останавливает захват.
+
+Если камера не открывается или выбрано другое устройство, выключите камеру при необходимости, измените **Номер камеры** на `1` или другой номер и снова нажмите **Открыть камеру**. Приложение открывает выбранную камеру. Номер действует до закрытия приложения.
 
 В невысоком окне прокручивайте тестовое поле и настройки над кнопками камеры и мыши. Для прокрутки с клавиатуры нажмите **Page Up** или **Page Down**. При нажатии **Tab** элемент в фокусе появится в видимой части окна. Если управление остановилось для безопасности или произошла ошибка, краткая причина остаётся рядом с кнопками при прокрутке.
 
@@ -134,7 +138,7 @@ uv run --locked nose_pointer.py
 uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-ms 300
 ```
 
-- `--camera 1` выбирает другую веб-камеру. По умолчанию используется индекс `0`.
+- `--camera 1` задаёт начальный **Номер камеры**. По умолчанию используется `0`.
 - `--range-x` и `--range-y` задают долю кадра, которую нужно пройти от нейтральной позиции до края экрана. Меньшие значения повышают чувствительность. Своя пара значений появится в списке **Чувствительность** как **Своя**.
 - `--wink-ms` задаёт минимальную длительность подмигивания. По умолчанию это 220 мс.
 - `--dwell-ms 1600` открывает режим задержки и задаёт время ожидания от 600 до 5000 мс.

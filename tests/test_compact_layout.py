@@ -53,6 +53,7 @@ class CompactLayoutTests(unittest.TestCase):
             for language in ("en", "ru"):
                 with self.subTest(dpi=dpi, screen=screen, language=language):
                     app, mouse = self.open_window(dpi, screen, language)
+                    self.assert_widget_fits(app.camera_picker, app.root)
                     self.assert_widget_fits(app.camera_button, app.root)
                     self.assert_widget_fits(app.pointer_button, app.root)
                     self.assertTrue(app.workspace_scrollbar.winfo_ismapped())
@@ -161,6 +162,9 @@ class CompactLayoutTests(unittest.TestCase):
                     self.assertGreater(app.workspace.yview()[0], 0)
                     if notice == "camera_error":
                         app.workspace.yview_moveto(0)
+                        root.update()
+                        offset = app.status_label.winfo_rooty() - app.workspace.winfo_rooty()
+                        app.workspace.yview_moveto(offset / app.workspace_body.winfo_height())
                         root.update()
                         self.assertEqual(int(app.status_label.cget("height")), 0)
                         self.assert_widget_fits(app.status_label, app.workspace)

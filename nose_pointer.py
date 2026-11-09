@@ -34,6 +34,7 @@ MIN_DWELL_MS = 600
 MAX_DWELL_MS = 5000
 DWELL_PRESETS_MS = (MIN_DWELL_MS, 800, 1000, DEFAULT_DWELL_MS, 1500, 2000, 2500, 3000, 4000, MAX_DWELL_MS)
 FACE_LOSS_GRACE_SECONDS = 5.0
+MAX_CAMERA_INDEX = 2_147_483_647
 CAMERA_BRIEF_MESSAGES = {
     "camera_error_detail": "camera_error",
     "camera_unavailable": "camera_unavailable_brief",
@@ -179,6 +180,16 @@ class PointerApp:
                                            bg=BACKGROUND, fg=ALERT, anchor="w", justify="left",
                                            font=("Segoe UI", 10, "bold"), pady=4)
         footer.bind("<Configure>", lambda event: self.footer_notice_label.configure(wraplength=event.width))
+        camera_choice = tk.Frame(footer, bg=BACKGROUND)
+        camera_choice.pack(fill="x", pady=(0, 4))
+        camera_label = self.make_label(camera_choice, "camera_index", font=("Segoe UI", 10), fg=INK)
+        camera_label.pack(side="left", padx=(0, 9))
+        self.camera_index = tk.StringVar(value=str(args.camera))
+        self.camera_picker = ttk.Spinbox(camera_choice, from_=0, to=MAX_CAMERA_INDEX,
+                                         textvariable=self.camera_index, width=10)
+        self.camera_picker.pack(side="left")
+        camera_label.bind("<Button-1>", lambda _event: self.camera_picker.focus_set()
+                          if not self.camera_picker.instate(["disabled"]) else None)
         controls = tk.Frame(footer, bg=BACKGROUND)
         self.footer_controls = controls
         controls.pack(fill="x")
@@ -192,8 +203,10 @@ class PointerApp:
         self.make_label(footer, "hotkeys", font=("Segoe UI", 10, "bold"), fg=INK,
                         anchor="w", justify="left", wraplength=430).pack(fill="x", pady=(9, 0))
         privacy_key = "privacy_no_clicks" if args.no_clicks else "privacy"
-        self.make_label(footer, privacy_key, font=("Segoe UI", 9), fg=MUTED, anchor="w",
-                        justify="left", wraplength=430).pack(fill="x", pady=(4, 0))
+        privacy_label = self.make_label(footer, privacy_key, font=("Segoe UI", 9), fg=MUTED,
+                                        anchor="w", justify="left", wraplength=430)
+        privacy_label.pack(fill="x", pady=(4, 0))
+        privacy_label.bind("<Configure>", lambda event: privacy_label.configure(wraplength=event.width))
         self.workspace.bind("<Configure>", self.resize_workspace)
         self.workspace_body.bind("<Configure>", self.resize_workspace)
         root.bind("<FocusIn>", self.reveal_workspace_focus, add="+")
@@ -201,7 +214,8 @@ class PointerApp:
         root.bind("<Prior>", lambda _event: self.scroll_workspace(-1, "pages"))
         root.bind("<Next>", lambda _event: self.scroll_workspace(1, "pages"))
         # In a scrolling workspace, a wheel over a picker should scroll the view.
-        for picker in (self.language_picker, self.sensitivity_picker, self.mode_picker, self.delay_picker):
+        for picker in (self.language_picker, self.sensitivity_picker, self.mode_picker,
+                       self.delay_picker, self.camera_picker):
             picker.bind("<MouseWheel>", self.scroll_workspace_wheel, add="+")
         self.camera_button.focus_set()
         root.after(16, self.poll)
@@ -446,6 +460,16 @@ class PointerApp:
         if self.camera and self.camera.thread.is_alive():
             self.stop_camera("status_stopping")
             return
+        choice = self.camera_index.get().strip()
+        index = int(choice) if 0 < len(choice) <= 10 and choice.isascii() and choice.isdecimal() else -1
+        if not 0 <= index <= MAX_CAMERA_INDEX:
+            self.status_label.configure(height=3)
+            self.set_message("status", "camera_index_invalid")
+            self.set_footer_notice("camera_index_invalid")
+            self.camera_picker.focus_set()
+            self.camera_picker.selection_range(0, "end")
+            return
+        self.camera_index.set(str(index))
         self.disable_input()
         self.last_frame = None
         self.feed_stale = False
@@ -458,8 +482,15 @@ class PointerApp:
         self.status_label.configure(height=3)
         self.set_message("status", "status_opening")
         self.set_button("camera_button", "stop_camera")
-        self.camera = Camera(self.args.camera)
-        self.camera.start()
+        self.camera_picker.configure(state="disabled")
+        try:
+            self.camera = Camera(index)
+            self.camera.start()
+        except (OSError, RuntimeError) as error:
+            self.finish_camera()
+            self.status_label.configure(height=0)
+            self.set_message("status", "camera_error_detail", detail=str(error))
+            self.set_footer_notice("camera_error")
 
     def stop_camera(self, message, **fields):
         self.camera.stop()
@@ -472,6 +503,13 @@ class PointerApp:
             self.set_footer_notice()
         else:
             self.set_footer_notice(CAMERA_BRIEF_MESSAGES.get(message, message))
+
+    def finish_camera(self):
+        self.disable_input()
+        self.camera = None
+        self.camera_picker.configure(state="normal")
+        self.set_button("camera_button", "open_camera", state="normal")
+        self.set_message("mode", "mode_camera_off")
 
     def toggle_pointer(self):
         if self.active:
@@ -621,10 +659,7 @@ class PointerApp:
             if error is not None and not self.camera.stop_event.is_set():
                 self.stop_camera(error.key, detail=error.detail)
             if not self.camera.thread.is_alive():
-                self.disable_input()
-                self.camera = None
-                self.set_button("camera_button", "open_camera", state="normal")
-                self.set_message("mode", "mode_camera_off")
+                self.finish_camera()
                 if error is None:
                     self.status_label.configure(height=3)
                     self.set_message("status", "status_camera_off")
@@ -727,7 +762,7 @@ def main(argv=None):
             return
         if sys.platform != "win32":
             parser.error(text("cli_platform"))
-        if args.camera < 0:
+        if not 0 <= args.camera <= MAX_CAMERA_INDEX:
             parser.error(text("cli_camera_invalid"))
 
         from windows_mouse import WindowsMouse, enable_dpi_awareness

@@ -65,7 +65,7 @@ class PreviewTests(unittest.TestCase):
                            Canvas=Mock(side_effect=[workspace, pad]), StringVar=StringValue),
             patch.multiple("nose_pointer.ttk", Style=Mock(), Button=Mock(side_effect=self.buttons),
                            Combobox=Mock(side_effect=[Mock(), Mock(), Mock(), Mock()]), Progressbar=Mock(),
-                           Scrollbar=Mock()),
+                           Scrollbar=Mock(), Spinbox=Mock()),
         ):
             return PointerApp(self.root, self.mouse, settings,
                               SimpleNamespace(camera=0, no_clicks=no_clicks, swap_buttons=False))
@@ -304,6 +304,65 @@ class PreviewTests(unittest.TestCase):
         self.feed(1.4, MOVED_FACE)
         self.assertTrue(self.app.can_enable)
         self.assertFalse(self.app.active)
+        self.assert_no_system_input()
+
+    def test_camera_number_can_change_after_a_failed_open_or_a_completed_stop(self):
+        self.app.camera_picker.configure.assert_called_with(state="disabled")
+        self.camera.snapshot.return_value = (None, camera.CameraFailure("camera_unavailable"))
+        self.camera.thread.is_alive.return_value = False
+        self.app.poll()
+        self.app.camera_picker.configure.assert_called_with(state="normal")
+        self.assertIsNone(self.app.camera)
+        self.assertIn("Try another camera number", self.app.status.get())
+
+        other_camera = Mock()
+        other_camera.thread.is_alive.return_value = True
+        other_camera.snapshot.return_value = (None, None)
+        self.app.camera_index.set(" 1 ")
+        with patch("nose_pointer.Camera", return_value=other_camera) as factory:
+            self.app.toggle_camera()
+            factory.assert_called_once_with(1)
+            other_camera.start.assert_called_once_with()
+            self.assertEqual(self.app.camera_index.get(), "1")
+            self.app.camera_picker.configure.assert_called_with(state="disabled")
+            self.app.toggle_camera()
+            other_camera.stop.assert_called_once_with()
+            factory.assert_called_once_with(1)
+            self.app.camera_picker.configure.assert_called_with(state="disabled")
+
+        other_camera.thread.is_alive.return_value = False
+        self.app.poll()
+        self.app.camera_picker.configure.assert_called_with(state="normal")
+        self.assertIsNone(self.app.camera)
+        self.assert_no_system_input()
+        self.save_preference.assert_not_called()
+
+    def test_invalid_camera_number_never_starts_a_camera(self):
+        self.camera.snapshot.return_value = (None, None)
+        self.camera.thread.is_alive.return_value = False
+        self.app.poll()
+        with patch("nose_pointer.Camera") as factory:
+            for invalid in ("", "-1", "1.5", "another", "2147483648", "1" * 100):
+                with self.subTest(invalid=invalid):
+                    self.app.camera_index.set(invalid)
+                    self.app.toggle_camera()
+                    self.assertEqual(self.app.status.get(), self.app.text("camera_index_invalid"))
+                    self.assertIsNone(self.app.camera)
+            factory.assert_not_called()
+        self.app.camera_picker.focus_set.assert_called()
+        self.app.camera_picker.selection_range.assert_called_with(0, "end")
+        self.assert_no_system_input()
+
+    def test_camera_start_error_reenables_the_number_picker(self):
+        self.camera.snapshot.return_value = (None, None)
+        self.camera.thread.is_alive.return_value = False
+        self.app.poll()
+        with patch("nose_pointer.Camera") as factory:
+            factory.return_value.start.side_effect = RuntimeError("synthetic start failure")
+            self.app.toggle_camera()
+        self.assertIsNone(self.app.camera)
+        self.app.camera_picker.configure.assert_called_with(state="normal")
+        self.assertIn("synthetic start failure", self.app.status.get())
         self.assert_no_system_input()
 
     def test_cursor_read_failure_disarms_without_moving_or_clicking(self):
