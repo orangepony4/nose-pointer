@@ -64,6 +64,10 @@ MESSAGES = {
     "safety_jump": ("Face moved suddenly. System control is off.", "Лицо резко сместилось. Управление выключено."),
     "safety_loss": ("Face out of view too long. System control is off.", "Лицо долго не было видно. Управление выключено."),
     "safety_multiple": ("Multiple faces detected. System control is off.", "В кадре несколько лиц. Управление выключено."),
+    "safety_pointer_moved": (
+        "Click cancelled. The pointer is elsewhere. System control is off.",
+        "Клик отменён. Указатель в другой точке. Управление выключено.",
+    ),
     "instruction_wink": ("Wink with one eye, then reopen it.", "Подмигните одним глазом и откройте его."),
     "instruction_motion": ("Move the dot with your nose. Clicks are disabled.", "Двигайте точку носом. Клики отключены."),
     "instruction_dwell": ("Move the pointer, then hold it still to left-click.", "Переместите точку, затем задержитесь для левого клика."),

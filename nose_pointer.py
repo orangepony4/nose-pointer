@@ -444,6 +444,9 @@ class PointerApp:
             if self.active:
                 self.last_applied_position = anchor if calibrating else self.mouse.move(*result.position)
         if result.click and not (self.args.no_clicks or self.settings.motion_only):
+            if self.active and self.mouse.position() != self.last_applied_position:
+                self.pause_for_safety("safety_pointer_moved")
+                return
             button = result.click
             if self.settings.dwell_seconds is not None and self.right_dwell_armed_at is not None:
                 button = "right"

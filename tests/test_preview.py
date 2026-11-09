@@ -356,6 +356,82 @@ class PreviewTests(unittest.TestCase):
         for time in (1.8, 1.98, 2.16, 2.34, 2.42):
             self.feed(time)
         self.assertEqual(self.mouse.click.call_args_list, [call("right"), call("left")])
+        self.assertEqual(self.mouse.position.call_count, 2)
+
+    def test_dwell_click_is_cancelled_when_windows_clamps_the_pointer(self):
+        self.select_quick_dwell()
+        self.arm_system_pointer()
+        self.app.toggle_right_dwell()
+        self.feed(0.8)
+
+        def clipped_move(x, y):
+            self.mouse.position.return_value = (0.25, 0.25)
+            return x, y
+
+        self.mouse.move.side_effect = clipped_move
+        for time in (0.9, 1.08, 1.26, 1.44):
+            self.feed(time, MOVED_FACE)
+        self.mouse.position.assert_not_called()
+        self.feed(1.52, MOVED_FACE)
+
+        self.mouse.position.assert_called_once()
+        self.mouse.click.assert_not_called()
+        self.assertFalse(self.app.active)
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.assertEqual(self.app.safety_notice, "safety_pointer_moved")
+        self.assertIn("Click cancelled", self.app.status.get())
+        self.assertIn("Right click cancelled", self.app.last_gesture.get())
+        self.app.dwell_bar.configure.assert_called_with(value=0)
+
+    def test_wink_click_is_cancelled_after_another_device_moves_the_pointer(self):
+        self.arm_system_pointer()
+        self.feed(0.80, MOVED_FACE)
+        self.feed(0.90, LEFT_WINK)
+        self.feed(1.02, LEFT_WINK)
+        self.mouse.position.assert_not_called()
+        self.mouse.position.return_value = (0.9, 0.8)
+        self.feed(1.17)
+
+        self.mouse.position.assert_called_once()
+        self.mouse.click.assert_not_called()
+        self.assertFalse(self.app.active)
+        self.assertEqual(self.app.safety_notice, "safety_pointer_moved")
+        for time in (1.25, 1.35, 1.45, 1.56):
+            self.feed(time)
+        self.assertTrue(self.app.can_enable)
+        self.assertFalse(self.app.active)
+        self.mouse.move.assert_called_once()
+        self.mouse.click.assert_not_called()
+
+    def test_wink_click_accepts_the_last_applied_snapped_pixel(self):
+        self.arm_system_pointer()
+        snapped = (0.29, 0.67)
+        self.mouse.move.side_effect = None
+        self.mouse.move.return_value = snapped
+        self.mouse.position.return_value = snapped
+        self.feed(0.80, MOVED_FACE)
+        self.assertNotEqual(self.app.position, snapped)
+        self.feed(0.90, LEFT_WINK)
+        self.feed(1.02, LEFT_WINK)
+        self.mouse.position.assert_not_called()
+        self.feed(1.17)
+
+        self.assertTrue(self.app.active)
+        self.mouse.position.assert_called_once()
+        self.mouse.move.assert_called_once()
+        self.mouse.click.assert_called_once_with("left")
+
+    def test_cursor_read_failure_at_click_disarms_without_input(self):
+        self.arm_system_pointer()
+        self.feed(0.80, LEFT_WINK)
+        self.feed(0.92, LEFT_WINK)
+        self.mouse.position.side_effect = OSError("Desktop unavailable")
+        self.feed(1.07)
+
+        self.mouse.position.assert_called_once()
+        self.assert_no_system_input()
+        self.assertFalse(self.app.active)
+        self.assertIn("Desktop unavailable", self.app.last_gesture.get())
 
     def test_right_dwell_is_cleared_by_explicit_cancel_loss_gap_and_pause(self):
         self.select_quick_dwell()
