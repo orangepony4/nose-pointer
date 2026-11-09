@@ -66,6 +66,7 @@ class PointerApp:
         self.last_applied_position = None
         self.recovery_pending = False
         self.right_dwell_armed_at: float | None = None
+        self.enter_press = None
         self.feed_stale = False
         self.can_enable = False
         self.safety_notice = ""
@@ -202,6 +203,13 @@ class PointerApp:
         self.pointer_button.pack(side="left")
         self.right_dwell_button = ttk.Button(self.dwell_controls, command=self.toggle_right_dwell)
         self.right_dwell_button.bind("<ButtonRelease-3>", self.cancel_right_dwell)
+        self.enter_buttons = (self.camera_button, self.pointer_button, self.right_dwell_button)
+        for key in ("Return", "KP_Enter"):
+            root.bind(f"<KeyRelease-{key}>", self.release_button_enter, add="+")
+            for button in self.enter_buttons:
+                button.bind(f"<KeyPress-{key}>", self.press_button_enter)
+                button.bind(f"<KeyRelease-{key}>", self.release_button_enter)
+        root.bind("<FocusOut>", self.cancel_button_enter, add="+")
         self.show_click_instructions()
         hotkey_label = self.make_label(footer, "hotkeys", font=("Segoe UI", 10, "bold"), fg=INK,
                                        anchor="w", justify="left", wraplength=430)
@@ -222,8 +230,51 @@ class PointerApp:
         for picker in (self.language_picker, self.sensitivity_picker, self.mode_picker,
                        self.delay_picker, self.camera_picker):
             picker.bind("<MouseWheel>", self.scroll_workspace_wheel, add="+")
+            for key in ("Return", "KP_Enter"):
+                picker.bind(f"<KeyPress-{key}>", self.remember_other_enter, add="+")
         self.camera_button.focus_set()
         root.after(16, self.poll)
+
+    def press_button_enter(self, event):
+        if self.enter_press is None:
+            button = event.widget
+            if button is self.root.focus_get() and button.instate(["!disabled"]):
+                self.enter_press = event.keysym, button, button.cget("text")
+            else:
+                self.enter_press = event.keysym, None, None
+        return "break"
+
+    def remember_other_enter(self, event):
+        if self.enter_press is None:
+            self.enter_press = event.keysym, None, None
+
+    def configure_action_button(self, button, **options):
+        if self.enter_press is not None and self.enter_press[1] is button:
+            key, _, label = self.enter_press
+            if options.get("state") == "disabled" or options.get("text", label) != label:
+                self.enter_press = key, None, None
+        button.configure(**options)
+
+    def release_button_enter(self, event):
+        if self.enter_press is not None and self.enter_press[0] == event.keysym:
+            _, button, label = self.enter_press
+            self.enter_press = None
+            if (button is event.widget and button is self.root.focus_get()
+                    and button.instate(["!disabled"]) and button.cget("text") == label):
+                button.invoke()
+        if event.widget in self.enter_buttons:
+            return "break"
+
+    def cancel_button_enter(self, event):
+        if self.enter_press is not None:
+            if self.enter_press[1] is event.widget:
+                # Keep the key marked as held until release so repeats cannot arm a new button.
+                self.enter_press = self.enter_press[0], None, None
+            self.root.after_idle(self.clear_enter_outside_window)
+
+    def clear_enter_outside_window(self):
+        if not self.root.tk.call("focus", "-displayof", self.root):
+            self.enter_press = None
 
     def resize_workspace(self, _event=None):
         viewport = self.workspace
@@ -320,7 +371,7 @@ class PointerApp:
 
     def set_button(self, target, key, **options):
         self.button_labels[target] = key
-        getattr(self, target).configure(text=self.text(key), **options)
+        self.configure_action_button(getattr(self, target), text=self.text(key), **options)
 
     def choice_labels(self, keys):
         return tuple(self.text(key) for key in keys)
@@ -358,7 +409,7 @@ class PointerApp:
         for label, key in self.static_labels:
             label.configure(text=self.text(key))
         for target, key in self.button_labels.items():
-            getattr(self, target).configure(text=self.text(key))
+            self.configure_action_button(getattr(self, target), text=self.text(key))
         for target in self.messages:
             self.render_message(target)
         self.refresh_right_dwell_button()
@@ -381,7 +432,8 @@ class PointerApp:
     def refresh_right_dwell_button(self):
         armed = self.right_dwell_armed_at is not None
         available = self.settings.dwell_seconds is not None and not self.args.no_clicks
-        self.right_dwell_button.configure(
+        self.configure_action_button(
+            self.right_dwell_button,
             text=self.text("cancel" if armed else "right_click"),
             state="normal" if available and (self.can_enable or armed) else "disabled",
         )
@@ -449,7 +501,7 @@ class PointerApp:
         self.reset_calibration()
         self.position = (0.5, 0.5)
         self.draw_pad()
-        self.pointer_button.configure(state="disabled")
+        self.configure_action_button(self.pointer_button, state="disabled")
         self.show_click_instructions()
 
     def draw_pad(self, _event=None):
@@ -628,7 +680,7 @@ class PointerApp:
             self.can_enable = can_enable
             self.refresh_right_dwell_button()
         if not self.active:
-            self.pointer_button.configure(state="normal" if self.can_enable else "disabled")
+            self.configure_action_button(self.pointer_button, state="normal" if self.can_enable else "disabled")
         hint = f"hint_{result.state}"
         if self.settings.motion_only and result.state in ("calibrating", "rearming"):
             hint += "_motion"

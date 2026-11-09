@@ -420,6 +420,73 @@ class PreviewTests(unittest.TestCase):
         self.assert_no_system_input()
         self.save_preference.assert_not_called()
 
+    def test_enter_activates_once_on_release_and_respects_disabled_or_changed_button(self):
+        button = self.app.camera_button
+        self.root.focus_get.return_value = button
+        button.instate.return_value = True
+        button.cget.return_value = "Open camera"
+        bindings = dict(call.args for call in button.bind.call_args_list)
+        for key in ("Return", "KP_Enter"):
+            with self.subTest(key=key):
+                press = bindings[f"<KeyPress-{key}>"]
+                release = bindings[f"<KeyRelease-{key}>"]
+                event = SimpleNamespace(widget=button, keysym=key)
+                press(event)
+                press(event)
+                button.invoke.assert_not_called()
+                release(event)
+                release(event)
+                button.invoke.assert_called_once_with()
+                button.invoke.reset_mock()
+
+                press(event)
+                button.instate.return_value = False
+                release(event)
+                button.invoke.assert_not_called()
+                button.instate.return_value = True
+                press(event)
+                button.cget.return_value = "Turn off camera"
+                release(event)
+                button.invoke.assert_not_called()
+                button.cget.return_value = "Open camera"
+
+                press(event)
+                self.app.configure_action_button(button, state="disabled")
+                self.app.configure_action_button(button, state="normal")
+                press(event)
+                release(event)
+                button.invoke.assert_not_called()
+
+    def test_enter_focus_change_disarms_the_original_press_and_any_repeat(self):
+        camera_button, pointer_button = self.app.camera_button, self.app.pointer_button
+        for button in (camera_button, pointer_button):
+            button.instate.return_value = True
+        self.root.focus_get.return_value = camera_button
+        self.app.press_button_enter(SimpleNamespace(widget=camera_button, keysym="Return"))
+        self.app.cancel_button_enter(SimpleNamespace(widget=camera_button))
+        self.root.focus_get.return_value = pointer_button
+        event = SimpleNamespace(widget=pointer_button, keysym="Return")
+        self.app.press_button_enter(event)
+        self.app.release_button_enter(event)
+        camera_button.invoke.assert_not_called()
+        pointer_button.invoke.assert_not_called()
+        self.app.press_button_enter(event)
+        self.app.release_button_enter(event)
+        pointer_button.invoke.assert_called_once_with()
+
+    def test_enter_held_from_a_picker_does_not_activate_a_button(self):
+        button = self.app.camera_button
+        button.instate.return_value = True
+        self.root.focus_get.return_value = button
+        event = SimpleNamespace(widget=button, keysym="Return")
+        self.app.remember_other_enter(SimpleNamespace(widget=self.app.camera_picker, keysym="Return"))
+        self.app.press_button_enter(event)
+        self.app.release_button_enter(event)
+        button.invoke.assert_not_called()
+        self.app.press_button_enter(event)
+        self.app.release_button_enter(event)
+        button.invoke.assert_called_once_with()
+
     def test_invalid_camera_number_never_starts_a_camera(self):
         self.camera.snapshot.return_value = (None, None)
         self.camera.thread.is_alive.return_value = False
