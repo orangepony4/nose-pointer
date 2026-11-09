@@ -20,6 +20,11 @@ ACCENT = "#315538"
 WINK_MODE = "Подмигивание"
 DWELL_MODE = "Задержка курсора"
 MOTION_MODE = "Только движение"
+SENSITIVITY_PRESETS = {
+    "Низкая": (0.18, 0.15, Settings.dead_zone),
+    "Обычная": (Settings.range_x, Settings.range_y, Settings.dead_zone),
+    "Высокая": (0.065, 0.054, Settings.dead_zone),
+}
 DEFAULT_DWELL_MS = 1200
 DWELL_PRESETS_MS = (600, 800, 1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000)
 FACE_LOSS_GRACE_SECONDS = 5.0
@@ -65,7 +70,7 @@ class PointerApp:
         root.configure(bg=BACKGROUND)
         extra_scale = max(0.0, root.winfo_fpixels("1i") / 96 - 1)
         width = min(round(580 + 100 * extra_scale), root.winfo_screenwidth() - 32)
-        height = min(round(610 + 330 * extra_scale), root.winfo_screenheight() - 64)
+        height = min(round(610 + 365 * extra_scale), root.winfo_screenheight() - 64)
         root.geometry(f"{width}x{height}")
         root.minsize(width - 20, height - 25)
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -102,9 +107,24 @@ class PointerApp:
         gesture_label.pack(fill="x", pady=(8, 10))
         gesture_label.bind("<Configure>", lambda event: gesture_label.configure(wraplength=event.width))
 
-        click_controls = tk.Frame(frame, bg=BACKGROUND)
-        click_controls.pack(fill="x", pady=(0, 12))
-        click_row = tk.Frame(click_controls, bg=BACKGROUND)
+        settings_controls = tk.Frame(frame, bg=BACKGROUND)
+        settings_controls.pack(fill="x", pady=(0, 12))
+        sensitivity_row = tk.Frame(settings_controls, bg=BACKGROUND)
+        sensitivity_row.pack(fill="x", pady=(0, 8))
+        tk.Label(sensitivity_row, text="Чувствительность", font=("Segoe UI", 10),
+                 bg=BACKGROUND, fg=INK).pack(side="left", padx=(0, 9))
+        self.sensitivity_presets = SENSITIVITY_PRESETS.copy()
+        initial_range = (settings.range_x, settings.range_y, settings.dead_zone)
+        selected_sensitivity = next((label for label, preset in self.sensitivity_presets.items()
+                                     if preset == initial_range), "Своя")
+        self.sensitivity_presets[selected_sensitivity] = initial_range
+        self.sensitivity = tk.StringVar(value=selected_sensitivity)
+        self.sensitivity_picker = ttk.Combobox(sensitivity_row, textvariable=self.sensitivity,
+                                               values=tuple(self.sensitivity_presets), width=12, state="readonly")
+        self.sensitivity_picker.pack(side="left")
+        self.sensitivity_picker.bind("<<ComboboxSelected>>", self.change_sensitivity)
+
+        click_row = tk.Frame(settings_controls, bg=BACKGROUND)
         click_row.pack(fill="x")
         tk.Label(click_row, text="Режим клика", font=("Segoe UI", 10),
                  bg=BACKGROUND, fg=INK).pack(side="left", padx=(0, 9))
@@ -122,7 +142,7 @@ class PointerApp:
         self.dwell_durations = {dwell_label(delay): delay / 1000
                                 for delay in sorted({*DWELL_PRESETS_MS, current_delay})}
         self.dwell_time = tk.StringVar(value=dwell_label(current_delay))
-        self.dwell_controls = tk.Frame(click_controls, bg=BACKGROUND)
+        self.dwell_controls = tk.Frame(settings_controls, bg=BACKGROUND)
         tk.Label(self.dwell_controls, text="Задержка, с", font=("Segoe UI", 10),
                  bg=BACKGROUND, fg=INK).pack(side="left", padx=(0, 9))
         self.delay_picker = ttk.Combobox(self.dwell_controls, textvariable=self.dwell_time,
@@ -210,12 +230,22 @@ class PointerApp:
         mode = self.click_mode.get()
         motion_only = mode == MOTION_MODE
         dwell_seconds = self.dwell_durations[self.dwell_time.get()] if mode == DWELL_MODE else None
-        if self.settings.dwell_seconds == dwell_seconds and self.settings.motion_only == motion_only:
+        self.apply_tracking_settings(replace(self.settings, dwell_seconds=dwell_seconds, motion_only=motion_only))
+
+    def change_sensitivity(self, _event=None):
+        if self.active:
             return
-        self.settings = replace(self.settings, dwell_seconds=dwell_seconds, motion_only=motion_only)
-        self.tracker = Tracker(self.settings)
-        self.can_enable = False
-        self.clear_right_dwell()
+        range_x, range_y, dead_zone = self.sensitivity_presets[self.sensitivity.get()]
+        self.apply_tracking_settings(replace(self.settings, range_x=range_x, range_y=range_y, dead_zone=dead_zone))
+
+    def apply_tracking_settings(self, settings):
+        if settings == self.settings:
+            return
+        self.settings = settings
+        self.tracker = Tracker(settings)
+        self.reset_calibration()
+        self.position = (0.5, 0.5)
+        self.draw_pad()
         self.pointer_button.configure(state="disabled")
         self.show_click_instructions()
 
@@ -262,6 +292,7 @@ class PointerApp:
         self.recenter_held = self.mouse.recenter_requested()
         self.last_active_face_at = monotonic()
         self.active = True
+        self.sensitivity_picker.configure(state="disabled")
         self.mode_picker.configure(state="disabled")
         self.delay_picker.configure(state="disabled")
         self.mode.set("СИСТЕМНАЯ МЫШЬ ВКЛЮЧЕНА")
@@ -292,6 +323,7 @@ class PointerApp:
         self.active = False
         self.last_active_face_at = None
         self.reset_calibration()
+        self.sensitivity_picker.configure(state="readonly")
         self.mode_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
         self.delay_picker.configure(state="readonly")
         self.pointer_button.configure(text="Включить мышь", state="disabled")

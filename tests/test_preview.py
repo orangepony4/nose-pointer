@@ -1,3 +1,4 @@
+from dataclasses import replace
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, call, patch
@@ -44,6 +45,13 @@ class PreviewTests(unittest.TestCase):
         self.camera.stop_event.is_set.return_value = False
         self.clock = self.enterContext(patch("nose_pointer.monotonic"))
 
+        self.app = self.create_app(Settings(calibration_seconds=0.3, smoothing_seconds=0))
+        with patch("nose_pointer.Camera", return_value=self.camera) as factory:
+            self.app.toggle_camera()
+        factory.assert_called_once_with(0)
+        self.camera.start.assert_called_once_with()
+
+    def create_app(self, settings, *, no_clicks=False):
         pad = Mock()
         pad.winfo_width.return_value = 200
         pad.winfo_height.return_value = 150
@@ -52,15 +60,10 @@ class PreviewTests(unittest.TestCase):
             patch.multiple("nose_pointer.tk", Frame=Mock(), Label=Mock(),
                            Canvas=Mock(return_value=pad), StringVar=StringValue),
             patch.multiple("nose_pointer.ttk", Style=Mock(), Button=Mock(side_effect=self.buttons),
-                           Combobox=Mock(side_effect=[Mock(), Mock()]), Progressbar=Mock()),
+                           Combobox=Mock(side_effect=[Mock(), Mock(), Mock()]), Progressbar=Mock()),
         ):
-            self.app = PointerApp(self.root, self.mouse,
-                                  Settings(calibration_seconds=0.3, smoothing_seconds=0),
-                                  SimpleNamespace(camera=0, no_clicks=False, swap_buttons=False))
-        with patch("nose_pointer.Camera", return_value=self.camera) as factory:
-            self.app.toggle_camera()
-        factory.assert_called_once_with(0)
-        self.camera.start.assert_called_once_with()
+            return PointerApp(self.root, self.mouse, settings,
+                              SimpleNamespace(camera=0, no_clicks=no_clicks, swap_buttons=False))
 
     def feed(self, captured_at, sample=OPEN_FACE, *, wall_time=None):
         self.camera.snapshot.return_value = ((captured_at, sample), None)
@@ -86,6 +89,47 @@ class PreviewTests(unittest.TestCase):
         self.app.click_mode.set(DWELL_MODE)
         self.app.dwell_time.set("0,6")
         self.app.change_click_mode()
+
+    def test_sensitivity_increases_travel_and_clears_pending_gestures(self):
+        self.select_quick_dwell()
+        self.calibrate(0)
+        self.feed(0.4, MOVED_FACE)
+        standard_x = self.app.position[0]
+        self.app.toggle_right_dwell()
+        self.assertIsNotNone(self.app.right_dwell_armed_at)
+
+        self.app.sensitivity.set("Высокая")
+        self.app.change_sensitivity()
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.assertEqual(self.app.settings.dwell_seconds, 0.6)
+        self.assertFalse(self.app.can_enable)
+        self.assertEqual(self.app.position, (0.5, 0.5))
+        self.calibrate(0.5)
+        self.feed(0.9, MOVED_FACE)
+        self.assertLess(self.app.position[0], standard_x)
+        self.assert_no_system_input()
+
+    def test_sensitivity_is_locked_while_the_system_pointer_is_active(self):
+        self.arm_system_pointer()
+        self.app.sensitivity_picker.configure.assert_called_with(state="disabled")
+        tracker = self.app.tracker
+        self.app.sensitivity.set("Низкая")
+        self.app.change_sensitivity()
+        self.assertIs(self.app.tracker, tracker)
+        self.app.pause()
+        self.app.sensitivity_picker.configure.assert_called_with(state="readonly")
+
+    def test_custom_ranges_are_selectable_again_even_with_clicks_disabled(self):
+        settings = replace(self.app.settings, range_x=0.045, range_y=0.075, motion_only=True)
+        self.app = self.create_app(settings, no_clicks=True)
+        self.assertEqual(self.app.sensitivity.get(), "Своя")
+        self.app.sensitivity.set("Обычная")
+        self.app.change_sensitivity()
+        self.assertEqual(self.app.settings.range_x, Settings.range_x)
+        self.assertEqual(self.app.settings.range_y, Settings.range_y)
+        self.app.sensitivity.set("Своя")
+        self.app.change_sensitivity()
+        self.assertEqual(self.app.settings, settings)
 
     def test_preview_tracks_and_recognizes_a_wink_without_system_input(self):
         self.app.toggle_pointer()
