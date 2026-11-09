@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.9.8)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.8.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.8)
+**[Download the Windows ZIP (v0.9.9)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.9.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.9)
 
 ## English
 
@@ -89,7 +89,7 @@ The tests use synthetic face samples and mocked system input. The model check pr
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.9.8)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.8.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.8)
+**[Скачать ZIP для Windows (v0.9.9)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.9.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.9)
 
 ### Запуск на Windows
 

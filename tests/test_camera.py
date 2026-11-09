@@ -1,9 +1,12 @@
 from contextlib import nullcontext
+from hashlib import sha256
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, call, patch
 
-from camera import AMBIGUOUS_FACE, Camera, create_landmarker, extract_sample
+from camera import AMBIGUOUS_FACE, Camera, CameraError, create_landmarker, extract_sample, model_is_ready
 from tracking import FaceSample
 
 
@@ -187,13 +190,36 @@ class CameraTests(unittest.TestCase):
         landmarker.detect_for_video.assert_called_once()
         self.assertEqual(camera.error.key, "camera_no_frames")
 
-    def test_landmarker_requests_two_faces(self):
+    def test_landmarker_uses_verified_bytes_from_unicode_path_and_requests_two_faces(self):
         mediapipe = Mock()
-        with patch("camera.model_is_ready", return_value=True):
-            create_landmarker(mediapipe)
+        data = b"synthetic model payload"
+        with TemporaryDirectory() as folder:
+            model_path = Path(folder) / "Проверка" / "face_landmarker.task"
+            model_path.parent.mkdir()
+            model_path.write_bytes(data)
+            with patch.multiple("camera", MODEL_PATH=model_path, MODEL_SIZE=len(data),
+                                MODEL_SHA256=sha256(data).hexdigest()):
+                self.assertTrue(model_is_ready())
+                create_landmarker(mediapipe)
+        mediapipe.tasks.BaseOptions.assert_called_once_with(model_asset_buffer=data)
         options = mediapipe.tasks.vision.FaceLandmarkerOptions
         self.assertEqual(options.call_args.kwargs["num_faces"], 2)
         self.assertTrue(options.call_args.kwargs["output_face_blendshapes"])
+
+    def test_landmarker_rejects_wrong_size_or_hash_before_passing_bytes_to_mediapipe(self):
+        mediapipe = Mock()
+        with TemporaryDirectory() as folder:
+            model_path = Path(folder) / "face_landmarker.task"
+            with patch.multiple("camera", MODEL_PATH=model_path, MODEL_SIZE=4,
+                                MODEL_SHA256=sha256(b"good").hexdigest()):
+                for data in (b"small", b"fake"):
+                    with self.subTest(data=data):
+                        model_path.write_bytes(data)
+                        self.assertFalse(model_is_ready())
+                        with self.assertRaises(CameraError) as error:
+                            create_landmarker(mediapipe)
+                        self.assertEqual(error.exception.key, "model_missing")
+        mediapipe.tasks.BaseOptions.assert_not_called()
 
     def test_zero_faces_or_incomplete_scores_have_no_sample(self):
         for observation in (result([], []), result([NOSE], []), result([NOSE], [BLINKS[:1]])):

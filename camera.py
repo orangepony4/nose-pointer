@@ -35,9 +35,21 @@ class CameraFailure:
     detail: str = ""
 
 
+def read_verified_model():
+    if not MODEL_PATH.is_file():
+        return None
+    try:
+        with MODEL_PATH.open("rb") as model_file:
+            data = model_file.read(MODEL_SIZE + 1)
+    except FileNotFoundError:
+        return None
+    if len(data) != MODEL_SIZE or sha256(data).hexdigest() != MODEL_SHA256:
+        return None
+    return data
+
+
 def model_is_ready():
-    return (MODEL_PATH.is_file() and MODEL_PATH.stat().st_size == MODEL_SIZE
-            and sha256(MODEL_PATH.read_bytes()).hexdigest() == MODEL_SHA256)
+    return read_verified_model() is not None
 
 
 def download_model():
@@ -59,11 +71,13 @@ def download_model():
 
 
 def create_landmarker(mp):
-    if not model_is_ready():
+    model_data = read_verified_model()
+    if model_data is None:
         raise CameraError("model_missing")
     vision = mp.tasks.vision
     return vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
-        base_options=mp.tasks.BaseOptions(model_asset_path=str(MODEL_PATH)),
+        # MediaPipe's native Windows file loader cannot open every Unicode path.
+        base_options=mp.tasks.BaseOptions(model_asset_buffer=model_data),
         running_mode=vision.RunningMode.VIDEO,
         num_faces=2,
         output_face_blendshapes=True,
