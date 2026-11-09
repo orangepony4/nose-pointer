@@ -1,8 +1,6 @@
 """English and Russian messages for the desktop app and launcher commands."""
 
-from os import getenv
-from pathlib import Path
-from tempfile import NamedTemporaryFile
+from preferences import read_preference, save_preference
 
 LANGUAGES = {"en": "English", "ru": "Русский"}
 
@@ -133,40 +131,11 @@ def translate(language, key, **fields):
     return (russian if language == "ru" else english).format(**fields)
 
 
-def language_preference_path():
-    app_data = Path(getenv("LOCALAPPDATA", ""))
-    return app_data / "NosePointer" / "language.txt" if app_data.is_absolute() else None
-
-
 def load_language():
-    path = language_preference_path()
-    if path is None:
-        return "en"
-    try:
-        with path.open("rb") as preference:
-            saved = preference.read(5)
-    except OSError:
-        return "en"
+    saved = read_preference("language", 5)
     return "ru" if saved in (b"ru", b"ru\n", b"ru\r\n") else "en"
 
 
 def save_language(language):
-    path = language_preference_path()
-    if path is None or language not in LANGUAGES:
-        return
-
-    temporary = None
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with NamedTemporaryFile(dir=path.parent, prefix="language-", delete=False) as preference:
-            temporary = Path(preference.name)
-            preference.write((language + "\n").encode("ascii"))
-        temporary.replace(path)
-    except OSError:
-        pass
-    finally:
-        if temporary is not None:
-            try:
-                temporary.unlink(missing_ok=True)
-            except OSError:
-                pass
+    if language in LANGUAGES:
+        save_preference("language", language)

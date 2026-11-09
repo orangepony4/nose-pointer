@@ -1,0 +1,92 @@
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import unittest
+from unittest.mock import patch
+
+from nose_pointer import DEFAULT_DWELL_MS, DWELL_MODE, MOTION_MODE, SENSITIVITY_PRESETS, main
+from preferences import save_preference
+from tracking import Settings
+
+
+class PreferencesTests(unittest.TestCase):
+    def setUp(self):
+        folder = self.enterContext(TemporaryDirectory())
+        self.enterContext(patch.dict("os.environ", {"LOCALAPPDATA": folder}))
+        self.directory = Path(folder) / "NosePointer"
+
+    def launch(self, *arguments):
+        with (
+            patch("nose_pointer.sys.platform", "win32"),
+            patch("nose_pointer.tk.Tk"),
+            patch("windows_mouse.WindowsMouse"),
+            patch("windows_mouse.enable_dpi_awareness"),
+            patch("nose_pointer.PointerApp") as app,
+        ):
+            main(list(arguments))
+        return app.call_args.args[-2], app.call_args.kwargs["initial_dwell_ms"]
+
+    def test_missing_preferences_use_existing_defaults_without_writing(self):
+        self.assertEqual(self.launch(), (Settings(), DEFAULT_DWELL_MS))
+        self.assertFalse(self.directory.exists())
+
+    def test_normal_launch_restores_settings_and_cli_overrides_are_transient(self):
+        save_preference("sensitivity", "sensitivity_high")
+        save_preference("click-mode", DWELL_MODE)
+        save_preference("dwell-ms", 950)
+        stored = {path.name: path.read_bytes() for path in self.directory.iterdir()}
+
+        settings, delay = self.launch()
+        self.assertEqual((settings.range_x, settings.range_y, settings.dead_zone),
+                         SENSITIVITY_PRESETS["sensitivity_high"])
+        self.assertEqual((settings.dwell_seconds, delay), (0.95, 950))
+        self.assertFalse(settings.motion_only)
+
+        settings, delay = self.launch("--range-x", "0.08", "--dwell-ms", "850")
+        self.assertEqual((settings.range_x, settings.range_y), (0.08, Settings.range_y))
+        self.assertEqual((settings.dwell_seconds, delay), (0.85, 850))
+
+        settings, delay = self.launch("--range-y", "0.09", "--no-clicks")
+        self.assertEqual((settings.range_x, settings.range_y), (Settings.range_x, 0.09))
+        self.assertTrue(settings.motion_only)
+        self.assertIsNone(settings.dwell_seconds)
+        self.assertEqual(delay, 950)
+        self.assertEqual({path.name: path.read_bytes() for path in self.directory.iterdir()}, stored)
+
+    def test_dwell_delay_is_kept_while_another_mode_is_selected(self):
+        save_preference("click-mode", MOTION_MODE)
+        save_preference("dwell-ms", 800)
+        settings, delay = self.launch()
+        self.assertTrue(settings.motion_only)
+        self.assertIsNone(settings.dwell_seconds)
+        self.assertEqual(delay, 800)
+
+    def test_bad_preference_does_not_hide_other_valid_choices(self):
+        save_preference("sensitivity", "sensitivity_low")
+        save_preference("click-mode", DWELL_MODE)
+        (self.directory / "dwell-ms.txt").write_bytes(b"0" * 29 + b"850" + b"x" * 10_000)
+        settings, delay = self.launch()
+        self.assertEqual(settings.range_x, SENSITIVITY_PRESETS["sensitivity_low"][0])
+        self.assertEqual((settings.dwell_seconds, delay), (1.2, DEFAULT_DWELL_MS))
+
+        (self.directory / "sensitivity.txt").write_bytes(b"\xff")
+        save_preference("click-mode", "invalid")
+        save_preference("dwell-ms", 5001)
+        self.assertEqual(self.launch(), (Settings(), DEFAULT_DWELL_MS))
+
+    def test_blocked_storage_falls_back_and_failed_replace_keeps_previous_value(self):
+        save_preference("click-mode", MOTION_MODE)
+        with patch("pathlib.Path.replace", side_effect=PermissionError):
+            save_preference("click-mode", DWELL_MODE)
+        mode_path = self.directory / "click-mode.txt"
+        self.assertEqual(mode_path.read_bytes(), b"motion\n")
+        self.assertEqual(list(self.directory.iterdir()), [mode_path])
+
+        mode_path.unlink()
+        self.directory.rmdir()
+        self.directory.touch()
+        save_preference("click-mode", DWELL_MODE)
+        self.assertEqual(self.launch(), (Settings(), DEFAULT_DWELL_MS))
+
+
+if __name__ == "__main__":
+    unittest.main()

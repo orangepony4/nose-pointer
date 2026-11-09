@@ -9,6 +9,7 @@ from tkinter import ttk
 
 from camera import AMBIGUOUS_FACE, Camera, CameraError, check_inference, download_model
 from i18n import LANGUAGES, load_language, save_language, translate
+from preferences import load_text_preference, save_preference
 from tracking import Settings, Tracker
 
 
@@ -29,7 +30,9 @@ SENSITIVITY_PRESETS = {
     "sensitivity_high": (0.065, 0.054, Settings.dead_zone),
 }
 DEFAULT_DWELL_MS = 1200
-DWELL_PRESETS_MS = (600, 800, 1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000)
+MIN_DWELL_MS = 600
+MAX_DWELL_MS = 5000
+DWELL_PRESETS_MS = (MIN_DWELL_MS, 800, 1000, DEFAULT_DWELL_MS, 1500, 2000, 2500, 3000, 4000, MAX_DWELL_MS)
 FACE_LOSS_GRACE_SECONDS = 5.0
 CAMERA_BRIEF_MESSAGES = {
     "camera_error_detail": "camera_error",
@@ -43,7 +46,7 @@ def dwell_label(milliseconds, language):
 
 
 class PointerApp:
-    def __init__(self, root, mouse, settings, args):
+    def __init__(self, root, mouse, settings, args, *, initial_dwell_ms=DEFAULT_DWELL_MS):
         self.root = root
         self.mouse = mouse
         self.settings = settings
@@ -156,7 +159,7 @@ class PointerApp:
                                        state="disabled" if args.no_clicks else "readonly")
         self.mode_picker.pack(side="left")
         self.mode_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
-        current_delay = round(settings.dwell_seconds * 1000) if settings.dwell_seconds is not None else DEFAULT_DWELL_MS
+        current_delay = round(settings.dwell_seconds * 1000) if settings.dwell_seconds is not None else initial_dwell_ms
         self.dwell_presets = tuple(sorted({*DWELL_PRESETS_MS, current_delay}))
         self.dwell_durations = self.delay_choices()
         self.dwell_time = tk.StringVar(value=dwell_label(current_delay, self.language))
@@ -392,15 +395,21 @@ class PointerApp:
         self.set_message("last_gesture", "right_cancelled")
         return "break"
 
-    def change_click_mode(self, _event=None):
+    def change_click_mode(self, event=None):
         if self.active or self.args.no_clicks:
             return
         mode = self.choice_key(self.click_mode, CLICK_MODES)
         if mode is None:
             return
         motion_only = mode == MOTION_MODE
-        dwell_seconds = self.dwell_durations[self.dwell_time.get()] / 1000 if mode == DWELL_MODE else None
+        delay = self.dwell_durations[self.dwell_time.get()] if mode == DWELL_MODE else None
+        dwell_seconds = delay / 1000 if delay is not None else None
         self.apply_tracking_settings(replace(self.settings, dwell_seconds=dwell_seconds, motion_only=motion_only))
+        if event is not None and event.widget is self.delay_picker:
+            if delay is not None:
+                save_preference("dwell-ms", delay)
+        else:
+            save_preference("click-mode", mode)
 
     def change_sensitivity(self, _event=None):
         if self.active:
@@ -410,6 +419,8 @@ class PointerApp:
             return
         range_x, range_y, dead_zone = self.sensitivity_presets[preset]
         self.apply_tracking_settings(replace(self.settings, range_x=range_x, range_y=range_y, dead_zone=dead_zone))
+        if preset in SENSITIVITY_PRESETS:
+            save_preference("sensitivity", preset)
 
     def apply_tracking_settings(self, settings):
         if settings == self.settings:
@@ -641,6 +652,31 @@ class PointerApp:
         self.root.destroy()
 
 
+def load_tracking_settings(args):
+    if args.range_x is None and args.range_y is None:
+        preset = load_text_preference("sensitivity")
+        range_x, range_y, dead_zone = SENSITIVITY_PRESETS.get(preset, SENSITIVITY_PRESETS["sensitivity_standard"])
+    else:
+        range_x = Settings.range_x if args.range_x is None else args.range_x
+        range_y = Settings.range_y if args.range_y is None else args.range_y
+        dead_zone = Settings.dead_zone
+
+    if args.dwell_ms is not None:
+        mode, dwell_ms = DWELL_MODE, args.dwell_ms
+    else:
+        mode = MOTION_MODE if args.no_clicks else load_text_preference("click-mode")
+        saved_delay = load_text_preference("dwell-ms")
+        dwell_ms = int(saved_delay) if saved_delay.isdecimal() else DEFAULT_DWELL_MS
+        if not MIN_DWELL_MS <= dwell_ms <= MAX_DWELL_MS:
+            dwell_ms = DEFAULT_DWELL_MS
+
+    settings = Settings(mirror=not args.no_mirror, range_x=range_x, range_y=range_y,
+                        dead_zone=dead_zone, wink_min_seconds=args.wink_ms / 1000,
+                        dwell_seconds=dwell_ms / 1000 if mode == DWELL_MODE else None,
+                        motion_only=mode == MOTION_MODE)
+    return settings, dwell_ms
+
+
 def main(argv=None):
     language_option = argparse.ArgumentParser(add_help=False)
     language_option.add_argument("--lang", choices=LANGUAGES)
@@ -656,8 +692,8 @@ def main(argv=None):
     commands.add_argument("--download-model", action="store_true", help=text("cli_download"))
     commands.add_argument("--check", action="store_true", help=text("cli_check"))
     parser.add_argument("--camera", type=int, default=0, help=text("cli_camera"))
-    parser.add_argument("--range-x", type=float, default=0.12, help=text("cli_range_x"))
-    parser.add_argument("--range-y", type=float, default=0.10, help=text("cli_range_y"))
+    parser.add_argument("--range-x", type=float, help=text("cli_range_x"))
+    parser.add_argument("--range-y", type=float, help=text("cli_range_y"))
     parser.add_argument("--wink-ms", type=int, default=220, help=text("cli_wink"))
     parser.add_argument("--no-mirror", action="store_true", help=text("cli_no_mirror"))
     parser.add_argument("--swap-buttons", action="store_true", help=text("cli_swap"))
@@ -668,7 +704,7 @@ def main(argv=None):
     if args.lang is None and not (args.download_model or args.check):
         args.lang = load_language()
     language = args.lang or "en"
-    if args.dwell_ms is not None and not 600 <= args.dwell_ms <= 5000:
+    if args.dwell_ms is not None and not MIN_DWELL_MS <= args.dwell_ms <= MAX_DWELL_MS:
         parser.error(text("cli_dwell_invalid"))
     try:
         if args.download_model:
@@ -686,14 +722,11 @@ def main(argv=None):
 
         from windows_mouse import WindowsMouse, enable_dpi_awareness
 
-        settings = Settings(mirror=not args.no_mirror, range_x=args.range_x,
-                            range_y=args.range_y, wink_min_seconds=args.wink_ms / 1000,
-                            dwell_seconds=args.dwell_ms / 1000 if args.dwell_ms is not None else None,
-                            motion_only=args.no_clicks)
+        settings, dwell_ms = load_tracking_settings(args)
         enable_dpi_awareness()
         mouse = WindowsMouse()
         root = tk.Tk()
-        PointerApp(root, mouse, settings, args)
+        PointerApp(root, mouse, settings, args, initial_dwell_ms=dwell_ms)
         root.mainloop()
     except CameraError as error:
         parser.exit(1, f"Nose Pointer: {text(error.key)}\n")

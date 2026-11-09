@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.7.4)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.7.4.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.7.4)
+**[Download the Windows ZIP (v0.8.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.8.0.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.8.0)
 
 ## English
 
@@ -23,6 +23,8 @@ uv run --locked nose_pointer.py
 ### Start in practice mode
 
 Nose Pointer opens in English on first launch. Use **Language** to switch to **Русский** before enabling system control or while in practice mode. Switching keeps your practice position and settings. The app saves the language preference in `%LOCALAPPDATA%\NosePointer\language.txt`.
+
+The app remembers the sensitivity preset, click mode and dwell delay you choose. Each launch still starts with the camera and system control off. The command-line options `--range-x`, `--range-y`, `--no-clicks` and `--dwell-ms` override saved choices for that launch.
 
 1. Select **Open camera** (Открыть камеру). The green dot is a practice pointer. Your Windows cursor stays under your usual control.
 2. Look straight ahead while the app calibrates. The status shows calibration progress. Keep both eyes open in the click modes. Try moving the dot, then hold a wink for about a quarter of a second and open the eye. The app shows the recognized click below the practice area.
@@ -81,7 +83,7 @@ The tests use synthetic face samples and mocked system input. The model check pr
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.7.4)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.7.4.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.7.4)
+**[Скачать ZIP для Windows (v0.8.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.8.0.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.8.0)
 
 ### Запуск на Windows
 
@@ -98,6 +100,8 @@ uv run --locked nose_pointer.py
 ### Первое использование
 
 При первом запуске интерфейс открывается на английском. Выберите **Language → Русский** до включения системной мыши или в режиме пробы. Настройки и положение тестового указателя сохранятся. Язык запоминается в файле `%LOCALAPPDATA%\NosePointer\language.txt`.
+
+Приложение запоминает выбранный профиль чувствительности, режим клика и задержку. При каждом запуске камера и системное управление выключены. Параметры командной строки `--range-x`, `--range-y`, `--no-clicks` и `--dwell-ms` имеют приоритет над сохранёнными настройками на время текущего запуска.
 
 1. Нажмите **Открыть камеру**. В режиме пробы зелёная точка движется в окне, а курсор Windows остаётся под вашим обычным управлением.
 2. Смотрите прямо во время калибровки. В строке состояния видно, сколько уже пройдено. В режимах клика держите оба глаза открытыми. Попробуйте подвигать точку, затем подмигните одним глазом примерно на четверть секунды и откройте его. Под тестовым полем появится сторона распознанного клика.

@@ -13,6 +13,7 @@ from tracking import FaceSample, Settings
 class CompactLayoutTests(unittest.TestCase):
     def setUp(self):
         self.enterContext(patch("nose_pointer.save_language"))
+        self.enterContext(patch("nose_pointer.save_preference"))
 
     def open_window(self, dpi, screen, language):
         try:

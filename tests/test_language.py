@@ -41,6 +41,7 @@ class LanguageTests(unittest.TestCase):
             patch("windows_mouse.enable_dpi_awareness"),
             patch("nose_pointer.PointerApp") as app,
             patch("nose_pointer.load_language", return_value="ru") as load,
+            patch("nose_pointer.load_text_preference", return_value=""),
             patch("nose_pointer.save_language") as save,
         ):
             main([])
@@ -55,6 +56,7 @@ class LanguageTests(unittest.TestCase):
             patch("nose_pointer.download_model") as download,
             patch("nose_pointer.check_inference") as check,
             patch("nose_pointer.load_language") as load,
+            patch("nose_pointer.load_text_preference") as load_tracking,
             patch("nose_pointer.save_language") as save,
             redirect_stdout(StringIO()) as stdout,
         ):
@@ -65,6 +67,7 @@ class LanguageTests(unittest.TestCase):
             download.assert_called_once_with()
             check.assert_called_once_with()
             load.assert_not_called()
+            load_tracking.assert_not_called()
             save.assert_not_called()
 
 

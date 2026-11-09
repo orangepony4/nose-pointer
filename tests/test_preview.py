@@ -45,6 +45,7 @@ class PreviewTests(unittest.TestCase):
         self.camera.stop_event.is_set.return_value = False
         self.clock = self.enterContext(patch("nose_pointer.monotonic"))
         self.save_language = self.enterContext(patch("nose_pointer.save_language"))
+        self.save_preference = self.enterContext(patch("nose_pointer.save_preference"))
 
         self.app = self.create_app(Settings(calibration_seconds=0.3, smoothing_seconds=0))
         with patch("nose_pointer.Camera", return_value=self.camera) as factory:
@@ -93,6 +94,28 @@ class PreviewTests(unittest.TestCase):
         self.app.click_mode.set(self.app.text(DWELL_MODE))
         self.app.dwell_time.set("0.6")
         self.app.change_click_mode()
+
+    def test_settings_choosers_save_only_the_value_explicitly_changed(self):
+        self.app.sensitivity.set(self.app.text("sensitivity_high"))
+        self.app.change_sensitivity()
+        self.select_quick_dwell()
+        self.app.dwell_time.set("0.8")
+        self.app.change_click_mode(SimpleNamespace(widget=self.app.delay_picker))
+        self.app.language_choice.set("Русский")
+        self.app.change_language()
+        self.assertEqual(self.save_preference.mock_calls, [
+            call("sensitivity", "sensitivity_high"), call("click-mode", DWELL_MODE), call("dwell-ms", 800)
+        ])
+
+    def test_custom_launch_sensitivity_is_never_saved_as_a_preset(self):
+        app = self.create_app(Settings(range_x=0.08))
+        app.sensitivity.set(app.text("sensitivity_high"))
+        app.change_sensitivity()
+        self.save_preference.reset_mock()
+        app.sensitivity.set(app.text("sensitivity_custom"))
+        app.change_sensitivity()
+        self.assertEqual(app.settings.range_x, 0.08)
+        self.save_preference.assert_not_called()
 
     def test_calibration_status_shows_progress_and_resets_on_interruption(self):
         self.feed(0)
