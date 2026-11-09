@@ -116,6 +116,10 @@ MESSAGES = {
         "Hands-free webcam pointer for Windows with a practice mode and emergency pause.",
         "Управление указателем Windows через веб-камеру с режимом пробы и экстренной паузой.",
     ),
+    "cli_emergency_pause": (
+        "Tap F8 in Nose Pointer to pause. Hold F8 briefly in other windows.",
+        "Нажмите F8 в окне Nose Pointer для паузы. В другом окне ненадолго удерживайте F8.",
+    ),
     "cli_lang": ("interface language for this launch", "язык интерфейса для этого запуска"),
     "cli_help": ("show this help message and exit", "показать справку и завершить работу"),
     "cli_download": ("download and verify the local model", "скачать и проверить локальную модель"),

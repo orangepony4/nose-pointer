@@ -828,6 +828,23 @@ class PreviewTests(unittest.TestCase):
         self.assertFalse(self.app.active)
         self.assert_no_system_input()
 
+    def test_focused_f8_tap_cancels_a_pending_wink_and_held_f8_prevents_reenable(self):
+        self.arm_system_pointer()
+        self.feed(0.80, LEFT_WINK)
+        self.feed(0.92, LEFT_WINK)
+        pause = next(binding.args[1] for binding in self.root.bind.call_args_list if binding.args[0] == "<F8>")
+        pause(None)
+        pause(None)
+        self.feed(1.07)
+        self.assertFalse(self.app.active)
+        self.assert_no_system_input()
+        self.calibrate(1.18)
+        self.assertTrue(self.app.can_enable)
+        self.mouse.emergency_requested.return_value = True
+        self.app.toggle_pointer()
+        self.assertFalse(self.app.active)
+        self.assert_no_system_input()
+
     def test_ambiguous_faces_disarm_until_calibrated_and_enabled_again(self):
         self.arm_system_pointer()
         self.feed(0.80, LEFT_WINK)

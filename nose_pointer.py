@@ -80,6 +80,7 @@ class PointerApp:
         root.minsize(width - 20, height - 25)
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.bind("<Escape>", self.pause)
+        root.bind("<F8>", self.pause)
 
         style = ttk.Style(root)
         style.configure("TButton", font=("Segoe UI", 10), padding=(10, 8))
@@ -738,7 +739,7 @@ def main(argv=None):
     def text(key):
         return translate(language, key)
 
-    parser = argparse.ArgumentParser(description=text("cli_description"), add_help=False)
+    parser = argparse.ArgumentParser(description=text("cli_description"), epilog=text("cli_emergency_pause"), add_help=False)
     parser.add_argument("-h", "--help", action="help", help=text("cli_help"))
     parser.add_argument("--lang", choices=LANGUAGES, help=text("cli_lang"))
     commands = parser.add_mutually_exclusive_group()
