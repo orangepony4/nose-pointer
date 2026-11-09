@@ -48,9 +48,14 @@ class CameraTests(unittest.TestCase):
         def open_capture(index, backend):
             self.assertEqual(index, camera.index)
             if backend == DIRECTSHOW:
+                if isinstance(primary, Exception):
+                    raise primary
                 return primary
             self.assertEqual(backend, MEDIA_FOUNDATION)
-            primary.release.assert_called_once_with()
+            if not isinstance(primary, Exception):
+                primary.release.assert_called_once_with()
+            if isinstance(alternate, Exception):
+                raise alternate
             return alternate
 
         cv2 = SimpleNamespace(
@@ -98,6 +103,54 @@ class CameraTests(unittest.TestCase):
                 landmarker.detect_for_video.assert_called_once()
                 self.assertEqual(camera.latest[1], FACE)
                 self.assertIsNone(camera.error)
+
+    def test_driver_startup_exception_falls_back_to_the_same_camera_index(self):
+        for step in ("constructor", "isOpened", "set"):
+            with self.subTest(step=step):
+                camera = Camera(4)
+                startup_error = FakeCaptureError("first backend could not start")
+                primary, alternate = self.fake_capture(), self.fake_capture()
+                if step == "constructor":
+                    primary = startup_error
+                else:
+                    getattr(primary, step).side_effect = startup_error
+                self.give_one_frame(camera, alternate)
+                open_capture, landmarker = self.run_camera(camera, primary, alternate)
+                self.assertEqual(open_capture.call_args_list, [call(4, DIRECTSHOW), call(4, MEDIA_FOUNDATION)])
+                if step != "constructor":
+                    primary.read.assert_not_called()
+                    primary.release.assert_called_once_with()
+                alternate.release.assert_called_once_with()
+                landmarker.detect_for_video.assert_called_once()
+                self.assertEqual(camera.latest[1], FACE)
+                self.assertIsNone(camera.error)
+
+    def test_both_backend_startup_failures_keep_the_driver_detail(self):
+        camera = Camera(1)
+        primary = self.fake_capture()
+        primary.set.side_effect = OSError("first backend configuration failed")
+        alternate = FakeCaptureError("second backend did not open")
+        open_capture, landmarker = self.run_camera(camera, primary, alternate)
+        self.assertEqual(open_capture.call_args_list, [call(1, DIRECTSHOW), call(1, MEDIA_FOUNDATION)])
+        primary.release.assert_called_once_with()
+        landmarker.detect_for_video.assert_not_called()
+        self.assertEqual(camera.error.detail, "second backend did not open")
+
+    def test_stop_during_driver_startup_exception_releases_capture_and_skips_fallback(self):
+        camera = Camera(0)
+        primary, alternate = self.fake_capture(), self.fake_capture()
+
+        def stop_during_setup(*_args):
+            camera.stop()
+            raise OSError("setup interrupted")
+
+        primary.set.side_effect = stop_during_setup
+        open_capture, landmarker = self.run_camera(camera, primary, alternate)
+        open_capture.assert_called_once_with(0, DIRECTSHOW)
+        primary.release.assert_called_once_with()
+        primary.read.assert_not_called()
+        landmarker.detect_for_video.assert_not_called()
+        self.assertIsNone(camera.error)
 
     def test_failed_backends_keep_the_most_recent_nonempty_read_error(self):
         for alternate_detail in (None, "", "second backend read error"):

@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.9.9)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.9.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.9)
+**[Download the Windows ZIP (v0.9.10)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.10.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.10)
 
 ## English
 
@@ -33,7 +33,7 @@ The app remembers the sensitivity preset, click mode and dwell delay you choose.
 
 If the default camera fails to open or points at the wrong device, turn it off if needed, change **Camera number** to `1` or another number, and select **Open camera** again. The number applies to the current session.
 
-When you open the camera, the app tries Media Foundation for the same camera number if DirectShow cannot open it or deliver its first frame. Once video arrives, the app keeps using that backend for that capture session.
+When you open the camera, the app tries Media Foundation for the same camera number if DirectShow cannot open or configure the device or deliver its first frame. Once video arrives, the app keeps using that backend for that capture session.
 
 On shorter windows, scroll the practice area and settings above the camera and mouse buttons. Use **Page Up** or **Page Down** to scroll with the keyboard. Pressing **Tab** brings each focused control into view. Use **Enter** or **Space** on the focused camera, mouse control or right-click button. If control stops for safety or an error occurs, a brief reason stays near the buttons while you scroll.
 
@@ -89,7 +89,7 @@ The tests use synthetic face samples and mocked system input. The model check pr
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.9.9)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.9.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.9)
+**[Скачать ZIP для Windows (v0.9.10)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.10.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.10)
 
 ### Запуск на Windows
 
@@ -116,7 +116,7 @@ uv run --locked nose_pointer.py
 
 Если камера не открывается или выбрано другое устройство, выключите камеру при необходимости, измените **Номер камеры** на `1` или другой номер и снова нажмите **Открыть камеру**. Номер действует до закрытия приложения.
 
-При открытии камеры приложение пробует Media Foundation для того же номера, если DirectShow не может открыть камеру или получить первый кадр. После получения видео приложение продолжает использовать выбранный способ захвата до выключения камеры.
+При открытии камеры приложение пробует Media Foundation для того же номера, если DirectShow не может открыть или настроить устройство либо получить первый кадр. После получения видео приложение продолжает использовать выбранный способ захвата до выключения камеры.
 
 В невысоком окне прокручивайте тестовое поле и настройки над кнопками камеры и мыши. Для прокрутки с клавиатуры нажмите **Page Up** или **Page Down**. При нажатии **Tab** элемент в фокусе появится в видимой части окна. Нажмите **Enter** или **Пробел**, когда в фокусе кнопка камеры, управления мышью или правого клика. Если управление остановилось для безопасности или произошла ошибка, краткая причина остаётся рядом с кнопками при прокрутке.
 

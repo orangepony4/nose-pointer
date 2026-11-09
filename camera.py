@@ -134,22 +134,33 @@ class Camera:
 
             with create_landmarker(mp) as landmarker:
                 opened = False
-                read_failure = None
+                startup_failure = None
                 for backend in (cv2.CAP_DSHOW, cv2.CAP_MSMF):
                     if self.stop_event.is_set():
                         return
-                    capture = cv2.VideoCapture(self.index, backend)
+                    capture = None
                     try:
-                        if not self.stop_event.is_set() and capture.isOpened():
+                        try:
+                            capture = cv2.VideoCapture(self.index, backend)
+                            if self.stop_event.is_set():
+                                return
+                            if not capture.isOpened():
+                                continue
                             opened = True
+                            capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                            capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                        except (OSError, cv2.error) as error:
+                            failure = error
+                        else:
                             failure = self._capture_frames(capture, cv2, mp, landmarker)
-                            if failure is not None and (read_failure is None or str(failure)):
-                                read_failure = failure
                     finally:
-                        capture.release()
+                        if capture is not None:
+                            capture.release()
+                    if failure is not None and (startup_failure is None or str(failure)):
+                        startup_failure = failure
                 if not self.stop_event.is_set():
-                    if read_failure is not None:
-                        raise read_failure
+                    if startup_failure is not None:
+                        raise startup_failure
                     raise CameraError("camera_no_frames" if opened else "camera_unavailable")
         except Exception as error:
             detail = str(error)
@@ -159,8 +170,6 @@ class Camera:
                 self.error = failure
 
     def _capture_frames(self, capture, cv2, mp, landmarker):
-        capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         last_timestamp = -1
         failures = 0
         while not self.stop_event.is_set():

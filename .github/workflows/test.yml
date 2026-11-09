@@ -26,3 +26,21 @@ jobs:
         run: python -m compileall -q camera.py nose_pointer.py tracking.py windows_mouse.py
       - name: Test tracking without camera hardware
         run: python -m unittest discover -s tests -v
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.13.1'
+          enable-cache: false
+      - name: Check the Windows launcher from a folder with Cyrillic and spaces
+        shell: pwsh
+        env:
+          PYTHONUTF8: '1'
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'nose-pointer.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'Nose Pointer Проверка'
+          git archive --format=zip --output $archive HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination
+          Set-Location -LiteralPath $destination
+          & './Start Nose Pointer.cmd' --check --lang en
+          exit $LASTEXITCODE
