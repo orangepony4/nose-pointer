@@ -80,10 +80,77 @@ class CompactLayoutTests(unittest.TestCase):
     def test_spacious_window_expands_practice_area_without_scrollbar(self):
         app, mouse = self.open_window(96, (1920, 1080), "en")
         self.assertFalse(app.workspace_scrollbar.winfo_ismapped())
+        self.assertTrue(app.footer_privacy.winfo_ismapped())
+        self.assertFalse(app.workspace_privacy.winfo_ismapped())
+        self.assertEqual(app.camera_button.cget("text"), app.text("open_camera"))
         self.assertGreater(app.pad.winfo_height(), app.pad.winfo_reqheight())
         self.assert_widget_fits(app.delay_picker, app.workspace)
         self.assert_widget_fits(app.pointer_button, app.root)
         self.assertEqual(mouse.mock_calls, [])
+
+    def test_large_text_keeps_footer_actions_and_tabbed_settings_reachable(self):
+        for dpi in (288, 384):
+            screens = ((800, 600), (1024, 768))
+            if dpi == 384:
+                screens += ((640, 480),)
+            for screen in screens:
+                for language in ("en", "ru"):
+                    with self.subTest(dpi=dpi, screen=screen, language=language):
+                        app, mouse = self.open_window(dpi, screen, language)
+                        root = app.root
+                        fixed_actions = (app.camera_picker, app.camera_button, app.pointer_button)
+                        for widget in fixed_actions:
+                            self.assert_widget_fits(widget, root)
+                        self.assert_widget_fits(app.hotkey_label, root)
+
+                        fake_camera = Mock()
+                        fake_camera.stop_event.is_set.return_value = False
+                        fake_camera.thread.is_alive.return_value = True
+                        mouse.emergency_requested.return_value = False
+                        mouse.recenter_requested.return_value = False
+                        mouse.position.return_value = (0.5, 0.5)
+                        with patch("nose_pointer.Camera", return_value=fake_camera):
+                            app.camera_button.invoke()
+                        for index in range(6):
+                            app.update_tracking(index / 5, FaceSample(0.5, 0.5, 0.1, 0.1))
+                        root.update()
+                        self.assertFalse(app.pointer_button.instate(["disabled"]))
+                        app.camera_button.focus_force()
+                        root.update()
+                        visited = set()
+                        for _ in range(10):
+                            root.focus_get().event_generate("<KeyPress-Tab>")
+                            root.update()
+                            focused = root.focus_get()
+                            visited.add(focused)
+                            self.assert_widget_fits(focused, app.workspace if app.in_workspace(focused) else root)
+                            if focused is app.camera_button:
+                                break
+                        self.assertTrue({app.language_picker, app.sensitivity_picker, app.mode_picker,
+                                         app.delay_picker, app.right_dwell_button, app.pointer_button} <= visited)
+
+                        with patch("nose_pointer.monotonic", return_value=1.1):
+                            app.pointer_button.invoke()
+                        root.update()
+                        self.assertTrue(app.active)
+                        self.assert_widget_fits(app.pointer_button, root)
+                        self.assert_widget_fits(app.hotkey_label, root)
+
+                        app.pause_for_safety("safety_mouse_button")
+                        root.update()
+                        self.assert_widget_fits(app.footer_notice_label, root)
+                        for widget in fixed_actions:
+                            self.assert_widget_fits(widget, root)
+                        for widget in (app.language_picker, app.mode_picker, app.delay_picker):
+                            widget.focus_force()
+                            root.update()
+                            self.assert_widget_fits(widget, app.workspace)
+                        app.camera_button.invoke()
+                        root.update()
+                        self.assert_widget_fits(app.camera_button, root)
+                        self.assertTrue(app.camera_button.instate(["disabled"]))
+                        mouse.move.assert_not_called()
+                        mouse.click.assert_not_called()
 
     def test_scrollbar_tracks_optional_dwell_settings(self):
         app, mouse = self.open_window(96, (1920, 1080), "en")

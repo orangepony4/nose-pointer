@@ -6,6 +6,7 @@ from unittest.mock import Mock, call, patch
 import camera
 from nose_pointer import DWELL_MODE, MOTION_MODE, WINK_MODE, PointerApp
 from tracking import FaceSample, Settings
+from windows_mouse import DisplayLayoutChanged
 
 
 OPEN_FACE = FaceSample(0.50, 0.50, 0.1, 0.1)
@@ -764,6 +765,33 @@ class PreviewTests(unittest.TestCase):
         self.assert_no_system_input()
         self.assertFalse(self.app.active)
         self.assertIn("Desktop unavailable", self.app.last_gesture.get())
+
+    def test_display_layout_change_cancels_wink_and_requires_explicit_reenable(self):
+        self.arm_system_pointer()
+        self.feed(0.80, LEFT_WINK)
+        self.feed(0.92, LEFT_WINK)
+        self.mouse.position.side_effect = DisplayLayoutChanged
+        self.feed(1.07)
+
+        self.assert_no_system_input()
+        self.assertFalse(self.app.active)
+        self.mouse.end_control.assert_called_once()
+        self.assertIn("Display layout changed", self.app.status.get())
+        self.mouse.position.side_effect = None
+        self.calibrate(1.2)
+        self.assertFalse(self.app.active)
+        self.app.toggle_pointer()
+        self.mouse.begin_control.assert_called_once()
+        self.assertTrue(self.app.active)
+
+    def test_unavailable_display_during_enable_leaves_system_input_off(self):
+        self.calibrate(0)
+        self.mouse.begin_control.side_effect = OSError("No active display")
+        self.app.toggle_pointer()
+
+        self.assertFalse(self.app.active)
+        self.assert_no_system_input()
+        self.assertIn("No active display", self.app.last_gesture.get())
 
     def test_right_dwell_is_cleared_by_explicit_cancel_loss_gap_and_pause(self):
         self.select_quick_dwell()

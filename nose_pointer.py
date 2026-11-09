@@ -11,6 +11,7 @@ from camera import AMBIGUOUS_FACE, Camera, CameraError, check_inference, downloa
 from i18n import LANGUAGES, load_language, save_language, translate
 from preferences import load_text_preference, save_preference
 from tracking import Settings, Tracker
+from windows_mouse import DisplayLayoutChanged
 
 
 BACKGROUND = "#f7f5ef"
@@ -40,6 +41,8 @@ CAMERA_BRIEF_MESSAGES = {
     "camera_unavailable": "camera_unavailable_brief",
     "model_missing": "model_missing_brief",
 }
+COMPACT_ACTION_LABELS = {"open_camera": "open_camera_short", "stop_camera": "stop_camera_short",
+                         "enable_mouse": "enable_mouse_short"}
 
 def dwell_label(milliseconds, language):
     value = f"{milliseconds / 1000:g}"
@@ -70,6 +73,8 @@ class PointerApp:
         self.feed_stale = False
         self.can_enable = False
         self.safety_notice = ""
+        self.compact_footer = False
+        self.tight_footer = False
         self.position = (0.5, 0.5)
 
         root.title("Nose Pointer")
@@ -86,6 +91,8 @@ class PointerApp:
 
         style = ttk.Style(root)
         style.configure("TButton", font=("Segoe UI", 10), padding=(10, 8))
+        style.configure("Compact.TButton", padding=(6, 6))
+        style.configure("Tight.TButton", font=("Segoe UI", 8), padding=(6, 6))
         shell = tk.Frame(root, bg=BACKGROUND, padx=26, pady=22)
         shell.pack(fill="both", expand=True)
         shell.columnconfigure(0, weight=1)
@@ -105,14 +112,19 @@ class PointerApp:
         frame.grid(row=0, column=0, sticky="nsew")
         header = tk.Frame(frame, bg=BACKGROUND)
         header.pack(fill="x")
-        tk.Label(header, text="Nose Pointer", font=("Segoe UI", 26, "bold"),
-                 bg=BACKGROUND, fg=INK, anchor="w").pack(side="left")
+        header.columnconfigure(0, weight=1)
+        title = tk.Label(header, text="Nose Pointer", font=("Segoe UI", 26, "bold"),
+                         bg=BACKGROUND, fg=INK, anchor="w", justify="left")
+        title.grid(row=0, column=0, sticky="w")
+        language_controls = tk.Frame(header, bg=BACKGROUND)
+        language_controls.grid(row=0, column=1, sticky="e")
         self.language_choice = tk.StringVar(value=LANGUAGES[self.language])
-        self.language_picker = ttk.Combobox(header, textvariable=self.language_choice,
+        self.language_picker = ttk.Combobox(language_controls, textvariable=self.language_choice,
                                             values=tuple(LANGUAGES.values()), width=9, state="readonly")
         self.language_picker.pack(side="right")
         self.language_picker.bind("<<ComboboxSelected>>", self.change_language)
-        self.make_label(header, "language", font=("Segoe UI", 10), fg=INK).pack(side="right", padx=(0, 7))
+        self.make_label(language_controls, "language", font=("Segoe UI", 10), fg=INK).pack(side="right", padx=(0, 7))
+        header.bind("<Configure>", lambda event: self.resize_header(event, title, language_controls))
         self.make_label(frame, "subtitle", font=("Segoe UI", 11), fg=MUTED, anchor="w",
                         justify="left", wraplength=430).pack(fill="x", pady=(2, 17))
 
@@ -143,7 +155,7 @@ class PointerApp:
         settings_controls.pack(fill="x", pady=(0, 4))
         sensitivity_row = tk.Frame(settings_controls, bg=BACKGROUND)
         sensitivity_row.pack(fill="x", pady=(0, 8))
-        self.make_label(sensitivity_row, "sensitivity", font=("Segoe UI", 10), fg=INK).pack(side="left", padx=(0, 9))
+        sensitivity_label = self.make_label(sensitivity_row, "sensitivity", font=("Segoe UI", 10), fg=INK)
         self.sensitivity_presets = SENSITIVITY_PRESETS.copy()
         initial_range = (settings.range_x, settings.range_y, settings.dead_zone)
         selected_sensitivity = next((label for label, preset in self.sensitivity_presets.items()
@@ -152,29 +164,35 @@ class PointerApp:
         self.sensitivity = tk.StringVar(value=self.text(selected_sensitivity))
         self.sensitivity_picker = ttk.Combobox(sensitivity_row, textvariable=self.sensitivity,
                                                values=self.choice_labels(self.sensitivity_presets), width=12, state="readonly")
-        self.sensitivity_picker.pack(side="left")
+        self.layout_choice(sensitivity_row, sensitivity_label, self.sensitivity_picker)
         self.sensitivity_picker.bind("<<ComboboxSelected>>", self.change_sensitivity)
 
         click_row = tk.Frame(settings_controls, bg=BACKGROUND)
         click_row.pack(fill="x")
-        self.make_label(click_row, "click_mode", font=("Segoe UI", 10), fg=INK).pack(side="left", padx=(0, 9))
+        click_label = self.make_label(click_row, "click_mode", font=("Segoe UI", 10), fg=INK)
         self.click_mode = tk.StringVar(value=self.text(self.selected_click_mode()))
         self.mode_picker = ttk.Combobox(click_row, textvariable=self.click_mode,
                                        values=self.choice_labels(CLICK_MODES), width=18,
                                        state="disabled" if args.no_clicks else "readonly")
-        self.mode_picker.pack(side="left")
+        self.layout_choice(click_row, click_label, self.mode_picker)
         self.mode_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
         current_delay = round(settings.dwell_seconds * 1000) if settings.dwell_seconds is not None else initial_dwell_ms
         self.dwell_presets = tuple(sorted({*DWELL_PRESETS_MS, current_delay}))
         self.dwell_durations = self.delay_choices()
         self.dwell_time = tk.StringVar(value=dwell_label(current_delay, self.language))
         self.dwell_controls = tk.Frame(settings_controls, bg=BACKGROUND)
-        self.make_label(self.dwell_controls, "dwell_delay", font=("Segoe UI", 10), fg=INK).pack(side="left", padx=(0, 9))
-        self.delay_picker = ttk.Combobox(self.dwell_controls, textvariable=self.dwell_time,
+        self.dwell_controls.columnconfigure(1, weight=1)
+        dwell_settings = tk.Frame(self.dwell_controls, bg=BACKGROUND)
+        dwell_settings.grid(row=0, column=0, sticky="w")
+        dwell_actions = tk.Frame(self.dwell_controls, bg=BACKGROUND)
+        dwell_actions.grid(row=0, column=1, sticky="ew")
+        self.dwell_controls.bind("<Configure>", lambda event: self.resize_dwell(event, dwell_settings, dwell_actions))
+        self.make_label(dwell_settings, "dwell_delay", font=("Segoe UI", 10), fg=INK).pack(side="left", padx=(0, 9))
+        self.delay_picker = ttk.Combobox(dwell_settings, textvariable=self.dwell_time,
                                         values=tuple(self.dwell_durations), width=6, state="readonly")
         self.delay_picker.pack(side="left")
         self.delay_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
-        self.dwell_bar = ttk.Progressbar(self.dwell_controls, length=65, maximum=100, mode="determinate")
+        self.dwell_bar = ttk.Progressbar(dwell_actions, length=65, maximum=100, mode="determinate")
         self.dwell_bar.pack(side="left", fill="x", expand=True, padx=(12, 9))
 
         footer = tk.Frame(shell, bg=BACKGROUND)
@@ -201,7 +219,7 @@ class PointerApp:
         self.camera_button.pack(side="left", padx=(0, 8))
         self.pointer_button = ttk.Button(controls, text=self.text("enable_mouse"), command=self.toggle_pointer, state="disabled")
         self.pointer_button.pack(side="left")
-        self.right_dwell_button = ttk.Button(self.dwell_controls, command=self.toggle_right_dwell)
+        self.right_dwell_button = ttk.Button(dwell_actions, command=self.toggle_right_dwell)
         self.right_dwell_button.bind("<ButtonRelease-3>", self.cancel_right_dwell)
         self.enter_buttons = (self.camera_button, self.pointer_button, self.right_dwell_button)
         for key in ("Return", "KP_Enter"):
@@ -211,15 +229,19 @@ class PointerApp:
                 button.bind(f"<KeyRelease-{key}>", self.release_button_enter)
         root.bind("<FocusOut>", self.cancel_button_enter, add="+")
         self.show_click_instructions()
-        hotkey_label = self.make_label(footer, "hotkeys", font=("Segoe UI", 10, "bold"), fg=INK,
-                                       anchor="w", justify="left", wraplength=430)
-        hotkey_label.pack(fill="x", pady=(9, 0))
-        hotkey_label.bind("<Configure>", lambda event: hotkey_label.configure(wraplength=event.width))
+        self.hotkey_label = self.make_label(footer, "hotkeys", font=("Segoe UI", 10, "bold"), fg=INK,
+                                            anchor="w", justify="left", wraplength=430)
+        self.hotkey_label.pack(fill="x", pady=(9, 0))
+        self.hotkey_label.bind("<Configure>", lambda event: self.hotkey_label.configure(wraplength=event.width))
         privacy_key = "privacy_no_clicks" if args.no_clicks else "privacy"
-        privacy_label = self.make_label(footer, privacy_key, font=("Segoe UI", 9), fg=MUTED,
-                                        anchor="w", justify="left", wraplength=430)
-        privacy_label.pack(fill="x", pady=(4, 0))
-        privacy_label.bind("<Configure>", lambda event: privacy_label.configure(wraplength=event.width))
+        self.footer_privacy = self.make_label(footer, privacy_key, font=("Segoe UI", 9), fg=MUTED,
+                                              anchor="w", justify="left", wraplength=430)
+        self.footer_privacy.pack(fill="x", pady=(4, 0))
+        self.footer_privacy.bind("<Configure>", lambda event: self.footer_privacy.configure(wraplength=event.width))
+        self.workspace_privacy = self.make_label(frame, privacy_key, font=("Segoe UI", 9), fg=MUTED,
+                                                 anchor="w", justify="left", wraplength=430)
+        self.workspace_privacy.bind("<Configure>", lambda event: self.workspace_privacy.configure(wraplength=event.width))
+        root.bind("<Configure>", self.resize_footer, add="+")
         self.workspace.bind("<Configure>", self.resize_workspace)
         self.workspace_body.bind("<Configure>", self.resize_workspace)
         root.bind("<FocusIn>", self.reveal_workspace_focus, add="+")
@@ -276,6 +298,65 @@ class PointerApp:
         if not self.root.tk.call("focus", "-displayof", self.root):
             self.enter_press = None
 
+    def resize_header(self, event, title, language_controls):
+        title.configure(wraplength=event.width)
+        stacked = title.winfo_reqwidth() + language_controls.winfo_reqwidth() > event.width
+        if stacked:
+            language_controls.grid_configure(row=1, column=0, sticky="w", pady=(4, 0))
+        else:
+            language_controls.grid_configure(row=0, column=1, sticky="e", pady=0)
+
+    def resize_dwell(self, event, settings, actions):
+        stacked = settings.winfo_reqwidth() + actions.winfo_reqwidth() > event.width
+        if stacked:
+            actions.grid_configure(row=1, column=0, columnspan=2, pady=(4, 0))
+        else:
+            actions.grid_configure(row=0, column=1, columnspan=1, pady=0)
+
+    def layout_choice(self, row, label, picker):
+        label.grid(row=0, column=0, sticky="w")
+        picker.grid(row=0, column=1, padx=(9, 0), sticky="w")
+
+        def fit(event):
+            if label.winfo_reqwidth() + picker.winfo_reqwidth() + 9 > event.width:
+                picker.grid_configure(row=1, column=0, padx=0)
+            else:
+                picker.grid_configure(row=0, column=1, padx=(9, 0))
+
+        row.bind("<Configure>", fit)
+
+    def resize_footer(self, event):
+        if event.widget is not self.root:
+            return
+        scale = self.root.winfo_fpixels("1i") / 96
+        compact = event.width < 255 * scale or event.height < 140 * scale
+        # Preserve room to scroll on small displays without scaling down the workspace text.
+        tight = event.width < 175 * scale and event.height < 115 * scale
+        if (compact, tight) == (self.compact_footer, self.tight_footer):
+            return
+        self.compact_footer, self.tight_footer = compact, tight
+        if tight:
+            button_style = "Tight.TButton"
+        elif compact:
+            button_style = "Compact.TButton"
+        else:
+            button_style = "TButton"
+        self.camera_button.configure(style=button_style)
+        self.pointer_button.configure(style=button_style)
+        self.camera_button.pack_configure(padx=(0, 4 if compact else 8))
+        self.workspace.master.configure(padx=12 if tight else 26, pady=8 if tight else 22)
+        notice_font = ("Segoe UI", 8 if tight else 10, "bold")
+        self.hotkey_label.configure(font=notice_font)
+        self.footer_notice_label.configure(font=notice_font)
+        if compact:
+            self.footer_privacy.pack_forget()
+            self.workspace_privacy.pack(fill="x", pady=(4, 0))
+        else:
+            self.workspace_privacy.pack_forget()
+            self.footer_privacy.pack(fill="x", pady=(4, 0))
+        self.refresh_action_labels()
+        self.refresh_footer_notice()
+
     def resize_workspace(self, _event=None):
         viewport = self.workspace
         width, visible_height = viewport.winfo_width(), viewport.winfo_height()
@@ -305,15 +386,19 @@ class PointerApp:
             # Decide whether the workspace fits without reserving the notice itself.
             available += notice.winfo_height()
         compact = self.workspace_body.winfo_reqheight() > available
-        if self.footer_notice.get() and compact:
+        if self.footer_notice.get() and (compact or self.compact_footer):
             if not notice.winfo_manager():
                 notice.pack(fill="x", before=self.footer_controls)
         elif notice.winfo_manager():
             notice.pack_forget()
+        if self.compact_footer and notice.winfo_manager():
+            self.hotkey_label.pack_forget()
+        elif not self.hotkey_label.winfo_manager():
+            self.hotkey_label.pack(fill="x", pady=(9, 0), after=self.footer_controls)
 
     def in_workspace(self, widget):
         while widget is not None:
-            if widget is self.workspace:
+            if widget is self.workspace_body:
                 return True
             widget = getattr(widget, "master", None)
         return False
@@ -329,16 +414,21 @@ class PointerApp:
         viewport = self.workspace
         scroll_top = viewport.canvasy(0)
         view_height = viewport.winfo_height()
-        top = widget.winfo_rooty() - viewport.winfo_rooty()
-        bottom = top + widget.winfo_height()
-        if top < 0:
-            offset = top
-        elif bottom > view_height:
-            offset = bottom - view_height
+        widget_height = widget.winfo_height()
+        # Compute a content coordinate, which does not lag behind canvas scrolling.
+        top = 0
+        while widget is not self.workspace_body:
+            top += widget.winfo_y()
+            widget = widget.master
+        bottom = top + widget_height
+        if top < scroll_top:
+            destination = top
+        elif bottom > scroll_top + view_height:
+            destination = bottom - view_height
         else:
             return
         content_height = self.workspace_body.winfo_height()
-        viewport.yview_moveto((scroll_top + offset) / content_height)
+        viewport.yview_moveto(destination / content_height)
 
     def scroll_workspace_wheel(self, event):
         if event.delta:
@@ -371,7 +461,15 @@ class PointerApp:
 
     def set_button(self, target, key, **options):
         self.button_labels[target] = key
-        self.configure_action_button(getattr(self, target), text=self.text(key), **options)
+        self.configure_action_button(getattr(self, target), text=self.action_text(key), **options)
+
+    def action_text(self, key):
+        return self.text(COMPACT_ACTION_LABELS.get(key, key) if self.compact_footer else key)
+
+    def refresh_action_labels(self):
+        self.hotkey_label.configure(text=self.text("hotkeys_short" if self.compact_footer else "hotkeys"))
+        for target, key in self.button_labels.items():
+            self.configure_action_button(getattr(self, target), text=self.action_text(key))
 
     def choice_labels(self, keys):
         return tuple(self.text(key) for key in keys)
@@ -408,8 +506,7 @@ class PointerApp:
         self.mode_picker.configure(values=self.choice_labels(CLICK_MODES))
         for label, key in self.static_labels:
             label.configure(text=self.text(key))
-        for target, key in self.button_labels.items():
-            self.configure_action_button(getattr(self, target), text=self.text(key))
+        self.refresh_action_labels()
         for target in self.messages:
             self.render_message(target)
         self.refresh_right_dwell_button()
@@ -579,6 +676,11 @@ class PointerApp:
         if ready_at is None or not ready_at <= now <= ready_at + self.settings.max_sample_gap_seconds:
             self.pause_for_safety("safety_stale_preview")
             return
+        try:
+            self.mouse.begin_control()
+        except OSError as error:
+            self.stop_on_input_error(error)
+            return
         self.safety_notice = ""
         self.set_footer_notice()
         self.recenter_held = self.mouse.recenter_requested()
@@ -622,6 +724,8 @@ class PointerApp:
             self.toggle_right_dwell()
 
     def disable_input(self):
+        if self.active:
+            self.mouse.end_control()
         self.active = False
         self.last_active_face_at = None
         self.reset_calibration()
@@ -640,6 +744,11 @@ class PointerApp:
         self.safety_notice = message
         self.reset_to_preview(message)
         self.set_footer_notice(f"{message}_brief")
+
+    def stop_on_input_error(self, error):
+        self.reset_to_preview("status_paused")
+        self.set_message("last_gesture", "input_stopped", detail=str(error))
+        self.set_footer_notice("input_stopped_brief")
 
     def cancel_unsafe_click(self):
         if self.mouse.button_held():
@@ -760,10 +869,10 @@ class PointerApp:
                                 self.recovery_pending = True
                         self.last_frame = captured_at
                         self.update_tracking(captured_at, sample)
+                except DisplayLayoutChanged:
+                    self.pause_for_safety("safety_display_changed")
                 except OSError as error:
-                    self.pause()
-                    self.set_message("last_gesture", "input_stopped", detail=str(error))
-                    self.set_footer_notice("input_stopped_brief")
+                    self.stop_on_input_error(error)
         self.root.after(16, self.poll)
 
     def close(self):

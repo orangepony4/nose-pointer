@@ -114,6 +114,10 @@ def enable_dpi_awareness() -> bool:
     return bool(set_legacy_awareness() or is_aware())
 
 
+class DisplayLayoutChanged(OSError):
+    """The monitor rectangles no longer match the start of system control."""
+
+
 class WindowsMouse:
     """Read, move and click the cursor in the active Windows desktop."""
 
@@ -135,6 +139,19 @@ class WindowsMouse:
             user32, "SendInput", wintypes.UINT, wintypes.UINT, ctypes.POINTER(_Input), ctypes.c_int
         )
         self._key_state = _bind(user32, "GetAsyncKeyState", wintypes.SHORT, ctypes.c_int)
+        self._control_layout = None
+
+    def begin_control(self):
+        self._control_layout = tuple(sorted(self._monitor_rectangles()))
+
+    def end_control(self):
+        self._control_layout = None
+
+    def _checked_layout(self):
+        rectangles = self._monitor_rectangles()
+        if self._control_layout is not None and tuple(sorted(rectangles)) != self._control_layout:
+            raise DisplayLayoutChanged
+        return rectangles
 
     def _monitor_rectangles(self):
         rectangles = []
@@ -164,7 +181,7 @@ class WindowsMouse:
 
     def position(self) -> tuple[float, float]:
         """Read the current cursor in the same coordinates accepted by move()."""
-        bounds = self._desktop_bounds(self._monitor_rectangles())
+        bounds = self._desktop_bounds(self._checked_layout())
         point = wintypes.POINT()
         ctypes.set_last_error(0)
         if not self._get_cursor_pos(ctypes.byref(point)):
@@ -176,7 +193,7 @@ class WindowsMouse:
         if not math.isfinite(x) or not math.isfinite(y):
             raise ValueError("Cursor coordinates must be finite.")
 
-        rectangles = self._monitor_rectangles()
+        rectangles = self._checked_layout()
         bounds = self._desktop_bounds(rectangles)
         left, top, right, bottom = bounds
         pixel_x = left + round(min(max(x, 0.0), 1.0) * (right - left - 1))
@@ -200,6 +217,8 @@ class WindowsMouse:
         """Send a down/up pair without leaving a deliberately held button."""
         if button not in _BUTTON_FLAGS:
             raise ValueError("Mouse button must be 'left' or 'right'.")
+        if self._control_layout is not None:
+            self._checked_layout()
 
         events = (_Input * 2)()
         for event, flag in zip(events, _BUTTON_FLAGS[button]):
