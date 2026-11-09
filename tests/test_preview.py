@@ -333,6 +333,42 @@ class PreviewTests(unittest.TestCase):
         self.mouse.move.assert_called_once_with(0.25, 0.8)
         self.mouse.click.assert_not_called()
 
+    def test_focused_f9_recalibrates_once_and_does_not_send_the_pending_wink(self):
+        shortcut = next(binding.args[1] for binding in self.root.bind.call_args_list if binding.args[0] == "<F9>")
+        self.calibrate(0)
+        shortcut(None)
+        self.assertTrue(self.app.can_enable)
+        self.assertTrue(self.app.tracker.calibrated)
+        self.app.toggle_pointer()
+        self.calibrate(0.4)
+        self.mouse.reset_mock()
+
+        self.feed(0.80, LEFT_WINK)
+        self.feed(0.92, LEFT_WINK)
+        with patch.object(self.app, "recenter", wraps=self.app.recenter) as recenter:
+            shortcut(None)
+            shortcut(None)
+            self.mouse.recenter_requested.return_value = True
+            self.feed(1.07)
+            self.feed(1.18)
+        recenter.assert_called_once_with()
+        self.assertTrue(self.app.active)
+        self.assertFalse(self.app.tracker.calibrated)
+        self.assert_no_system_input()
+
+    def test_focused_f9_honors_a_held_emergency_key(self):
+        self.arm_system_pointer()
+        self.feed(0.80, LEFT_WINK)
+        self.feed(0.92, LEFT_WINK)
+        shortcut = next(binding.args[1] for binding in self.root.bind.call_args_list if binding.args[0] == "<F9>")
+        self.mouse.emergency_requested.return_value = True
+        with patch.object(self.app, "recenter", wraps=self.app.recenter) as recenter:
+            shortcut(None)
+        recenter.assert_not_called()
+        self.assertFalse(self.app.active)
+        self.feed(1.07)
+        self.assert_no_system_input()
+
     def test_empty_camera_error_disarms_and_reopening_returns_to_preview(self):
         self.arm_system_pointer()
         self.camera.snapshot.return_value = (None, camera.CameraFailure("camera_error"))
@@ -824,7 +860,10 @@ class PreviewTests(unittest.TestCase):
         self.feed(0.80, LEFT_WINK)
         self.feed(0.92, LEFT_WINK)
         self.mouse.emergency_requested.return_value = True
-        self.feed(1.07)
+        self.mouse.recenter_requested.return_value = True
+        with patch.object(self.app, "recenter", wraps=self.app.recenter) as recenter:
+            self.feed(1.07)
+        recenter.assert_not_called()
         self.assertFalse(self.app.active)
         self.assert_no_system_input()
 

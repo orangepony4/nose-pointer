@@ -81,6 +81,7 @@ class PointerApp:
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.bind("<Escape>", self.pause)
         root.bind("<F8>", self.pause)
+        root.bind("<F9>", self.request_recenter)
 
         style = ttk.Style(root)
         style.configure("TButton", font=("Segoe UI", 10), padding=(10, 8))
@@ -537,6 +538,15 @@ class PointerApp:
         self.set_button("pointer_button", "pause")
         self.recenter()
 
+    def request_recenter(self, _event=None):
+        if not self.active or self.recenter_held:
+            return
+        if self.mouse.emergency_requested():
+            self.pause()
+            return
+        self.recenter_held = True
+        self.recenter()
+
     def recenter(self):
         self.reset_calibration()
         self.set_message("status", "status_recenter_motion" if self.settings.motion_only else "status_recenter")
@@ -654,11 +664,10 @@ class PointerApp:
         if self.active:
             if self.mouse.emergency_requested():
                 self.pause()
+            elif self.mouse.recenter_requested():
+                self.request_recenter()
             else:
-                held = self.mouse.recenter_requested()
-                if held and not self.recenter_held:
-                    self.recenter()
-                self.recenter_held = held
+                self.recenter_held = False
         if self.camera:
             latest, error = self.camera.snapshot()
             now = monotonic()
@@ -739,7 +748,7 @@ def main(argv=None):
     def text(key):
         return translate(language, key)
 
-    parser = argparse.ArgumentParser(description=text("cli_description"), epilog=text("cli_emergency_pause"), add_help=False)
+    parser = argparse.ArgumentParser(description=text("cli_description"), epilog=text("cli_hotkeys"), add_help=False)
     parser.add_argument("-h", "--help", action="help", help=text("cli_help"))
     parser.add_argument("--lang", choices=LANGUAGES, help=text("cli_lang"))
     commands = parser.add_mutually_exclusive_group()

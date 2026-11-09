@@ -116,9 +116,11 @@ MESSAGES = {
         "Hands-free webcam pointer for Windows with a practice mode and emergency pause.",
         "Управление указателем Windows через веб-камеру с режимом пробы и экстренной паузой.",
     ),
-    "cli_emergency_pause": (
-        "Tap F8 in Nose Pointer to pause. Hold F8 briefly in other windows.",
-        "Нажмите F8 в окне Nose Pointer для паузы. В другом окне ненадолго удерживайте F8.",
+    "cli_hotkeys": (
+        "Tap F8 in Nose Pointer to pause. Hold F8 briefly in other windows. "
+        "With mouse control enabled, tap F9 here to recalibrate or hold it briefly in another window.",
+        "Нажмите F8 в окне Nose Pointer для паузы. В другом окне ненадолго удерживайте F8. "
+        "При включённом управлении нажмите F9 в приложении для калибровки или ненадолго удерживайте клавишу в другом окне.",
     ),
     "cli_lang": ("interface language for this launch", "язык интерфейса для этого запуска"),
     "cli_help": ("show this help message and exit", "показать справку и завершить работу"),

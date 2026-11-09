@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.9.4)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.4.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.4)
+**[Download the Windows ZIP (v0.9.5)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.5.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.5)
 
 ## English
 
@@ -47,7 +47,7 @@ Use **Click mode** (Режим клика) in practice mode.
 
 ### Recalibrate and recover
 
-Press **F9** with system control enabled to recalibrate from the current cursor position. In practice mode, use **Sensitivity** (Чувствительность) to tune the amount of head movement. **High** (Высокая) needs less movement, and **Low** (Низкая) gives finer control. Changing sensitivity starts a fresh calibration.
+With system control enabled, tap **F9** in Nose Pointer to recalibrate from the current cursor position. In another window, hold **F9** briefly. In practice mode, use **Sensitivity** (Чувствительность) to tune the amount of head movement. **High** (Высокая) needs less movement, and **Low** (Низкая) gives finer control. Changing sensitivity starts a fresh calibration.
 
 If you adjust your pose during desktop calibration, keep your final pose briefly as calibration finishes. The current cursor position is the starting point for your next movement.
 
@@ -89,7 +89,7 @@ The tests use synthetic face samples and mocked system input. The model check pr
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.9.4)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.4.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.4)
+**[Скачать ZIP для Windows (v0.9.5)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.5.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.5)
 
 ### Запуск на Windows
 
@@ -130,7 +130,7 @@ uv run --locked nose_pointer.py
 
 ### Калибровка и восстановление управления
 
-При включённой мыши нажмите **F9**, чтобы заново откалибровать управление с текущей позиции указателя. В режиме пробы настройте **Чувствительность**. **Высокая** требует меньших движений головы, а **Низкая** помогает точнее наводить указатель. Смена чувствительности запускает калибровку заново.
+При включённой мыши нажмите **F9** в окне Nose Pointer, чтобы заново откалибровать управление с текущей позиции указателя. В другом окне ненадолго удерживайте **F9**. В режиме пробы настройте **Чувствительность**. **Высокая** требует меньших движений головы, а **Низкая** помогает точнее наводить указатель. Смена чувствительности запускает калибровку заново.
 
 Если сменили позу при калибровке системной мыши, ненадолго задержитесь в новой позе до завершения калибровки. Следующее движение начнётся с текущей позиции указателя.
 
