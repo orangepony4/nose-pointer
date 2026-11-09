@@ -167,14 +167,15 @@ class CompactLayoutTests(unittest.TestCase):
                     mouse.click.assert_not_called()
 
     def test_growing_window_hides_duplicate_notice_when_workspace_fits(self):
-        app, mouse = self.open_window(192, (1280, 720), "ru")
+        # Grow a compact window without exceeding a hosted Windows display's resize limit.
+        app, mouse = self.open_window(96, (1280, 480), "ru")
         root = app.root
         app.pause_for_safety("safety_multiple")
         root.update()
         self.assertTrue(app.footer_notice_label.winfo_ismapped())
         fixed_height = root.winfo_height() - app.workspace.winfo_height() - app.footer_notice_label.winfo_height()
         (content,) = app.workspace_body.winfo_children()
-        root.geometry(f"{root.winfo_width()}x{fixed_height + content.winfo_reqheight() + 1}+0+0")
+        root.geometry(f"{root.winfo_width()}x{fixed_height + content.winfo_reqheight() + 16}+0+0")
         root.update()
         self.assertFalse(app.footer_notice_label.winfo_ismapped())
         self.assertFalse(app.workspace_scrollbar.winfo_ismapped())
