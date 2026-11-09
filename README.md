@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.9.1)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.1.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.1)
+**[Download the Windows ZIP (v0.9.2)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.2.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.2)
 
 ## English
 
@@ -31,7 +31,9 @@ The app remembers the sensitivity preset, click mode and dwell delay you choose.
 3. Choose your click mode and sensitivity while still in practice mode. Select **Enable mouse** (Включить мышь) when ready. Calibration uses the current cursor position as its starting point, and the pointer can reach across multiple monitors.
 4. Press **F8** from any window to pause. You can also press **Esc** in Nose Pointer, select **Pause** (Пауза), or close the app. **Turn off camera** (Выключить камеру) stops capture.
 
-If the default camera fails to open or points at the wrong device, turn it off if needed, change **Camera number** to `1` or another number, and select **Open camera** again. The app opens only the camera you choose. The number applies to the current session.
+If the default camera fails to open or points at the wrong device, turn it off if needed, change **Camera number** to `1` or another number, and select **Open camera** again. The number applies to the current session.
+
+When you open the camera, the app tries Media Foundation for the same camera number if DirectShow cannot open it or deliver its first frame. Once video arrives, the app keeps using that backend for that capture session.
 
 On shorter windows, scroll the practice area and settings above the camera and mouse buttons. Use **Page Up** or **Page Down** to scroll with the keyboard. Pressing **Tab** brings each focused control into view. If control stops for safety or an error occurs, a brief reason stays near the buttons while you scroll.
 
@@ -87,7 +89,7 @@ The tests use synthetic face samples and mocked system input. The model check pr
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.9.1)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.1.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.1)
+**[Скачать ZIP для Windows (v0.9.2)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.2.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.2)
 
 ### Запуск на Windows
 
@@ -112,7 +114,9 @@ uv run --locked nose_pointer.py
 3. Подберите режим клика и чувствительность в режиме пробы. Нажмите **Включить мышь**, когда будете готовы. Текущая позиция указателя станет опорной точкой. Управление охватывает и дополнительные мониторы.
 4. Для паузы нажмите **F8** в любом окне. Также можно нажать **Esc** в приложении, выбрать **Пауза** или закрыть окно. Кнопка **Выключить камеру** останавливает захват.
 
-Если камера не открывается или выбрано другое устройство, выключите камеру при необходимости, измените **Номер камеры** на `1` или другой номер и снова нажмите **Открыть камеру**. Приложение открывает выбранную камеру. Номер действует до закрытия приложения.
+Если камера не открывается или выбрано другое устройство, выключите камеру при необходимости, измените **Номер камеры** на `1` или другой номер и снова нажмите **Открыть камеру**. Номер действует до закрытия приложения.
+
+При открытии камеры приложение пробует Media Foundation для того же номера, если DirectShow не может открыть камеру или получить первый кадр. После получения видео приложение продолжает использовать выбранный способ захвата до выключения камеры.
 
 В невысоком окне прокручивайте тестовое поле и настройки над кнопками камеры и мыши. Для прокрутки с клавиатуры нажмите **Page Up** или **Page Down**. При нажатии **Tab** элемент в фокусе появится в видимой части окна. Если управление остановилось для безопасности или произошла ошибка, краткая причина остаётся рядом с кнопками при прокрутке.
 

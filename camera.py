@@ -114,53 +114,59 @@ class Camera:
                 self.pending_pause = self.latest
 
     def run(self):
-        capture = None
         try:
             import cv2
             import mediapipe as mp
 
             with create_landmarker(mp) as landmarker:
-                if self.stop_event.is_set():
-                    return
-                capture = cv2.VideoCapture(self.index, cv2.CAP_DSHOW)
-                if not capture.isOpened():
-                    capture.release()
+                opened = False
+                for backend in (cv2.CAP_DSHOW, cv2.CAP_MSMF):
                     if self.stop_event.is_set():
                         return
-                    capture = cv2.VideoCapture(self.index, cv2.CAP_MSMF)
-                if not capture.isOpened():
-                    raise CameraError("camera_unavailable")
-
-                capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-                capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-                last_timestamp = -1
-                failures = 0
-                while not self.stop_event.is_set():
-                    ok, frame = capture.read()
-                    captured_at = monotonic()
-                    if not ok:
-                        self.publish(captured_at, None)
-                        failures += 1
-                        if failures >= 20:
-                            raise CameraError("camera_no_frames")
-                        self.stop_event.wait(0.05)
-                        continue
-                    failures = 0
-                    timestamp = max(last_timestamp + 1, int(captured_at * 1000))
-                    last_timestamp = timestamp
-                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-                    sample = extract_sample(landmarker.detect_for_video(image, timestamp))
-                    self.publish(captured_at, sample)
+                    capture = cv2.VideoCapture(self.index, backend)
+                    try:
+                        if not self.stop_event.is_set() and capture.isOpened():
+                            opened = True
+                            self._capture_frames(capture, cv2, mp, landmarker)
+                    finally:
+                        capture.release()
+                if not self.stop_event.is_set():
+                    raise CameraError("camera_no_frames" if opened else "camera_unavailable")
         except Exception as error:
             detail = str(error)
             failure = (CameraFailure(error.key) if isinstance(error, CameraError)
                        else CameraFailure("camera_error_detail" if detail else "camera_error", detail))
             with self.lock:
                 self.error = failure
-        finally:
-            if capture is not None:
-                capture.release()
+
+    def _capture_frames(self, capture, cv2, mp, landmarker):
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        last_timestamp = -1
+        failures = 0
+        while not self.stop_event.is_set():
+            ok, frame = capture.read()
+            captured_at = monotonic()
+            if self.stop_event.is_set():
+                return
+            if not ok:
+                self.publish(captured_at, None)
+                failures += 1
+                if failures >= 20:
+                    # A backend switch is only for a camera that has yet to deliver a frame.
+                    if last_timestamp != -1:
+                        raise CameraError("camera_no_frames")
+                    return
+                self.stop_event.wait(0.05)
+                continue
+            failures = 0
+            timestamp = max(last_timestamp + 1, int(captured_at * 1000))
+            last_timestamp = timestamp
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            sample = extract_sample(landmarker.detect_for_video(image, timestamp))
+            if not self.stop_event.is_set():
+                self.publish(captured_at, sample)
 
 
 def check_inference():
