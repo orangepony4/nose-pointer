@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.7.3)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.7.3.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.7.3)
+**[Download the Windows ZIP (v0.7.4)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.7.4.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.7.4)
 
 ## English
 
@@ -25,11 +25,11 @@ uv run --locked nose_pointer.py
 Nose Pointer opens in English on first launch. Use **Language** to switch to **Русский** before enabling system control or while in practice mode. Switching keeps your practice position and settings. The app saves the language preference in `%LOCALAPPDATA%\NosePointer\language.txt`.
 
 1. Select **Open camera** (Открыть камеру). The green dot is a practice pointer. Your Windows cursor stays under your usual control.
-2. Look straight ahead while the app calibrates. Keep both eyes open in the click modes. Try moving the dot, then hold a wink for about a quarter of a second and open the eye. The app shows the recognized click below the practice area.
+2. Look straight ahead while the app calibrates. The status shows calibration progress. Keep both eyes open in the click modes. Try moving the dot, then hold a wink for about a quarter of a second and open the eye. The app shows the recognized click below the practice area.
 3. Choose your click mode and sensitivity while still in practice mode. Select **Enable mouse** (Включить мышь) when ready. Calibration uses the current cursor position as its starting point, and the pointer can reach across multiple monitors.
 4. Press **F8** from any window to pause. You can also press **Esc** in Nose Pointer, select **Pause** (Пауза), or close the app. **Turn off camera** (Выключить камеру) stops capture.
 
-On shorter windows, scroll the practice area and settings above the camera and mouse buttons. Use **Page Up** or **Page Down** to scroll with the keyboard. Pressing **Tab** brings each focused control into view.
+On shorter windows, scroll the practice area and settings above the camera and mouse buttons. Use **Page Up** or **Page Down** to scroll with the keyboard. Pressing **Tab** brings each focused control into view. If control stops for safety or an error occurs, a brief reason stays near the buttons while you scroll.
 
 ### Choose how to click
 
@@ -81,7 +81,7 @@ The tests use synthetic face samples and mocked system input. The model check pr
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.7.3)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.7.3.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.7.3)
+**[Скачать ZIP для Windows (v0.7.4)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.7.4.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.7.4)
 
 ### Запуск на Windows
 
@@ -100,11 +100,11 @@ uv run --locked nose_pointer.py
 При первом запуске интерфейс открывается на английском. Выберите **Language → Русский** до включения системной мыши или в режиме пробы. Настройки и положение тестового указателя сохранятся. Язык запоминается в файле `%LOCALAPPDATA%\NosePointer\language.txt`.
 
 1. Нажмите **Открыть камеру**. В режиме пробы зелёная точка движется в окне, а курсор Windows остаётся под вашим обычным управлением.
-2. Смотрите прямо во время калибровки. В режимах клика держите оба глаза открытыми. Попробуйте подвигать точку, затем подмигните одним глазом примерно на четверть секунды и откройте его. Под тестовым полем появится сторона распознанного клика.
+2. Смотрите прямо во время калибровки. В строке состояния видно, сколько уже пройдено. В режимах клика держите оба глаза открытыми. Попробуйте подвигать точку, затем подмигните одним глазом примерно на четверть секунды и откройте его. Под тестовым полем появится сторона распознанного клика.
 3. Подберите режим клика и чувствительность в режиме пробы. Нажмите **Включить мышь**, когда будете готовы. Текущая позиция указателя станет опорной точкой. Управление охватывает и дополнительные мониторы.
 4. Для паузы нажмите **F8** в любом окне. Также можно нажать **Esc** в приложении, выбрать **Пауза** или закрыть окно. Кнопка **Выключить камеру** останавливает захват.
 
-В невысоком окне прокручивайте тестовое поле и настройки над кнопками камеры и мыши. Для прокрутки с клавиатуры нажмите **Page Up** или **Page Down**. При нажатии **Tab** элемент в фокусе появится в видимой части окна.
+В невысоком окне прокручивайте тестовое поле и настройки над кнопками камеры и мыши. Для прокрутки с клавиатуры нажмите **Page Up** или **Page Down**. При нажатии **Tab** элемент в фокусе появится в видимой части окна. Если управление остановилось для безопасности или произошла ошибка, краткая причина остаётся рядом с кнопками при прокрутке.
 
 ### Режимы клика
 

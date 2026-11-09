@@ -4,8 +4,9 @@ import tkinter as tk
 import unittest
 from unittest.mock import Mock, patch
 
+import camera
 from nose_pointer import DWELL_MODE, WINK_MODE, PointerApp
-from tracking import Settings
+from tracking import FaceSample, Settings
 
 
 @unittest.skipUnless(sys.platform == "win32", "Checks Windows Tk geometry")
@@ -109,6 +110,85 @@ class CompactLayoutTests(unittest.TestCase):
         app.delay_picker.event_generate("<FocusIn>")
         root.update()
         self.assert_widget_fits(app.delay_picker, app.workspace)
+        self.assertEqual(mouse.mock_calls, [])
+
+    def test_compact_notice_stays_visible_with_scrolled_settings(self):
+        for language in ("en", "ru"):
+            for notice in ("safety_multiple_brief", "camera_error"):
+                with self.subTest(language=language, notice=notice):
+                    app, mouse = self.open_window(192, (1280, 720), language)
+                    root = app.root
+                    fake_camera = Mock()
+                    fake_camera.stop_event.is_set.return_value = False
+                    fake_camera.thread.is_alive.return_value = True
+                    mouse.emergency_requested.return_value = False
+                    mouse.recenter_requested.return_value = False
+                    with patch("nose_pointer.Camera", return_value=fake_camera):
+                        app.camera_button.invoke()
+                    for index in range(6):
+                        app.update_tracking(index / 5, FaceSample(0.5, 0.5, 0.1, 0.1))
+                    with patch("nose_pointer.monotonic", return_value=1.1):
+                        app.pointer_button.invoke()
+                    self.assertTrue(app.active)
+                    root.update()
+                    app.workspace.yview_moveto(1)
+                    root.update()
+                    footer_top = app.camera_button.winfo_rooty()
+                    self.assertGreater(app.workspace.yview()[0], 0)
+
+                    if notice == "safety_multiple_brief":
+                        fake_camera.snapshot.return_value = ((1.2, camera.AMBIGUOUS_FACE), None)
+                        detailed_status = app.text("safety_multiple")
+                    else:
+                        detail = "\n".join(f"Synthetic driver detail {number}" for number in range(1, 6))
+                        fake_camera.snapshot.return_value = (
+                            None, camera.CameraFailure("camera_error_detail", detail)
+                        )
+                        fake_camera.thread.is_alive.return_value = False
+                        detailed_status = app.text("camera_error_detail", detail=detail)
+                    with patch("nose_pointer.monotonic", return_value=1.2), patch.object(root, "after"):
+                        app.poll()
+                    root.update()
+
+                    self.assertFalse(app.active)
+                    self.assertTrue(app.pointer_button.instate(["disabled"]))
+                    self.assertEqual(app.status.get(), detailed_status)
+                    self.assertEqual(app.footer_notice.get(), app.text(notice))
+                    self.assert_widget_fits(app.footer_notice_label, root)
+                    self.assert_widget_fits(app.pointer_button, root)
+                    self.assertEqual(app.camera_button.winfo_rooty(), footer_top)
+                    self.assertGreater(app.workspace.yview()[0], 0)
+                    if notice == "camera_error":
+                        app.workspace.yview_moveto(0)
+                        root.update()
+                        self.assertEqual(int(app.status_label.cget("height")), 0)
+                        self.assert_widget_fits(app.status_label, app.workspace)
+                    mouse.move.assert_not_called()
+                    mouse.click.assert_not_called()
+
+    def test_growing_window_hides_duplicate_notice_when_workspace_fits(self):
+        app, mouse = self.open_window(192, (1280, 720), "ru")
+        root = app.root
+        app.pause_for_safety("safety_multiple")
+        root.update()
+        self.assertTrue(app.footer_notice_label.winfo_ismapped())
+        fixed_height = root.winfo_height() - app.workspace.winfo_height() - app.footer_notice_label.winfo_height()
+        (content,) = app.workspace_body.winfo_children()
+        root.geometry(f"{root.winfo_width()}x{fixed_height + content.winfo_reqheight() + 1}+0+0")
+        root.update()
+        self.assertFalse(app.footer_notice_label.winfo_ismapped())
+        self.assertFalse(app.workspace_scrollbar.winfo_ismapped())
+        self.assert_widget_fits(app.status_label, app.workspace)
+        self.assertEqual(app.status.get(), app.text("safety_multiple"))
+        self.assertEqual(mouse.mock_calls, [])
+
+    def test_notice_layout_tolerates_focus_in_a_native_popdown(self):
+        app, mouse = self.open_window(192, (1280, 720), "en")
+        with patch.object(app.root, "focus_get", side_effect=KeyError("popdown")):
+            app.pause_for_safety("safety_multiple")
+            app.resize_workspace()
+        app.root.update()
+        self.assert_widget_fits(app.footer_notice_label, app.root)
         self.assertEqual(mouse.mock_calls, [])
 
 

@@ -53,13 +53,15 @@ class PreviewTests(unittest.TestCase):
         self.camera.start.assert_called_once_with()
 
     def create_app(self, settings, *, no_clicks=False):
+        workspace = Mock()
+        workspace.winfo_ismapped.return_value = False
         pad = Mock()
         pad.winfo_width.return_value = 200
         pad.winfo_height.return_value = 150
         self.buttons = [Mock(), Mock(), Mock()]
         with (
             patch.multiple("nose_pointer.tk", Frame=Mock(), Label=Mock(),
-                           Canvas=Mock(side_effect=[Mock(), pad]), StringVar=StringValue),
+                           Canvas=Mock(side_effect=[workspace, pad]), StringVar=StringValue),
             patch.multiple("nose_pointer.ttk", Style=Mock(), Button=Mock(side_effect=self.buttons),
                            Combobox=Mock(side_effect=[Mock(), Mock(), Mock(), Mock()]), Progressbar=Mock(),
                            Scrollbar=Mock()),
@@ -91,6 +93,23 @@ class PreviewTests(unittest.TestCase):
         self.app.click_mode.set(self.app.text(DWELL_MODE))
         self.app.dwell_time.set("0.6")
         self.app.change_click_mode()
+
+    def test_calibration_status_shows_progress_and_resets_on_interruption(self):
+        self.feed(0)
+        self.assertIn("Calibration 0%", self.app.status.get())
+        self.feed(0.1)
+        self.assertIn("Calibration 30%", self.app.status.get())
+        self.assertFalse(self.app.can_enable)
+        self.app.language_choice.set("Русский")
+        self.app.change_language()
+        self.assertIn("Калибровка 30%", self.app.status.get())
+
+        self.feed(0.15, LEFT_WINK)
+        self.assertIn("Калибровка 0%", self.app.status.get())
+        self.calibrate(0.2)
+        self.assertTrue(self.app.can_enable)
+        self.assertIn("Лицо в кадре", self.app.status.get())
+        self.assert_no_system_input()
 
     def test_language_switch_preserves_tracking_and_preview_selections(self):
         self.select_quick_dwell()
@@ -145,18 +164,22 @@ class PreviewTests(unittest.TestCase):
         self.feed(0.4, camera.AMBIGUOUS_FACE)
         self.feed(0.5)
         self.assertIn("Multiple faces detected", self.app.status.get())
+        self.assertEqual(self.app.footer_notice.get(), "Multiple faces detected.")
         self.app.language_choice.set("Русский")
         self.app.change_language()
         self.assertIn("В кадре несколько лиц", self.app.status.get())
         self.assertIn("Смотрите прямо", self.app.status.get())
+        self.assertEqual(self.app.footer_notice.get(), "В кадре несколько лиц.")
 
         self.camera.snapshot.return_value = (None, camera.CameraFailure("camera_unavailable"))
         self.camera.thread.is_alive.return_value = False
         self.app.poll()
         self.assertIn("Камеру открыть не удалось", self.app.status.get())
+        self.assertEqual(self.app.footer_notice.get(), "Камеру открыть не удалось.")
         self.app.language_choice.set("English")
         self.app.change_language()
         self.assertIn("Could not open the camera", self.app.status.get())
+        self.assertEqual(self.app.footer_notice.get(), "Could not open the camera.")
         self.assert_no_system_input()
 
     def test_sensitivity_increases_travel_and_clears_pending_gestures(self):
@@ -267,6 +290,7 @@ class PreviewTests(unittest.TestCase):
         self.feed(0.4)
         self.assertFalse(self.app.active)
         self.assertIn("Desktop unavailable", self.app.last_gesture.get())
+        self.assertEqual(self.app.footer_notice.get(), "System input stopped.")
         self.assert_no_system_input()
 
     def test_switching_to_dwell_keeps_preview_local_and_clicks_left_only_when_enabled(self):

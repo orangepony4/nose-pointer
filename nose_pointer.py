@@ -18,6 +18,7 @@ INK = "#23271f"
 MUTED = "#565c50"
 EDGE = "#dedbd1"
 ACCENT = "#315538"
+ALERT = "#81261b"
 WINK_MODE = "wink"
 DWELL_MODE = "dwell"
 MOTION_MODE = "motion"
@@ -30,6 +31,11 @@ SENSITIVITY_PRESETS = {
 DEFAULT_DWELL_MS = 1200
 DWELL_PRESETS_MS = (600, 800, 1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000)
 FACE_LOSS_GRACE_SECONDS = 5.0
+CAMERA_BRIEF_MESSAGES = {
+    "camera_error_detail": "camera_error",
+    "camera_unavailable": "camera_unavailable_brief",
+    "model_missing": "model_missing_brief",
+}
 
 def dwell_label(milliseconds, language):
     value = f"{milliseconds / 1000:g}"
@@ -165,7 +171,13 @@ class PointerApp:
 
         footer = tk.Frame(shell, bg=BACKGROUND)
         footer.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        self.footer_notice = tk.StringVar(value="")
+        self.footer_notice_label = tk.Label(footer, textvariable=self.footer_notice,
+                                           bg=BACKGROUND, fg=ALERT, anchor="w", justify="left",
+                                           font=("Segoe UI", 10, "bold"), pady=4)
+        footer.bind("<Configure>", lambda event: self.footer_notice_label.configure(wraplength=event.width))
         controls = tk.Frame(footer, bg=BACKGROUND)
+        self.footer_controls = controls
         controls.pack(fill="x")
         self.camera_button = ttk.Button(controls, text=self.text("open_camera"), command=self.toggle_camera)
         self.camera_button.pack(side="left", padx=(0, 8))
@@ -205,6 +217,26 @@ class PointerApp:
         else:
             self.workspace_scrollbar.grid_remove()
             viewport.yview_moveto(0)
+        self.refresh_footer_notice()
+
+    def set_footer_notice(self, *keys):
+        self.set_message("footer_notice", *keys)
+        self.refresh_footer_notice()
+
+    def refresh_footer_notice(self):
+        if not self.workspace.winfo_ismapped():
+            return
+        notice = self.footer_notice_label
+        available = self.workspace.winfo_height()
+        if notice.winfo_ismapped():
+            # Decide whether the workspace fits without reserving the notice itself.
+            available += notice.winfo_height()
+        compact = self.workspace_body.winfo_reqheight() > available
+        if self.footer_notice.get() and compact:
+            if not notice.winfo_manager():
+                notice.pack(fill="x", before=self.footer_controls)
+        elif notice.winfo_manager():
+            notice.pack_forget()
 
     def in_workspace(self, widget):
         while widget is not None:
@@ -214,7 +246,11 @@ class PointerApp:
         return False
 
     def reveal_workspace_focus(self, event=None):
-        widget = event.widget if event is not None else self.root.focus_get()
+        try:
+            widget = event.widget if event is not None else self.root.focus_get()
+        except KeyError:
+            # A native combobox popdown can have focus without a Python widget.
+            return
         if not self.in_workspace(widget) or not widget.winfo_ismapped():
             return
         viewport = self.workspace
@@ -403,10 +439,12 @@ class PointerApp:
         self.last_frame = None
         self.feed_stale = False
         self.safety_notice = ""
+        self.set_footer_notice()
         self.position = (0.5, 0.5)
         self.draw_pad()
         self.show_click_instructions()
         self.set_message("mode", "mode_preview")
+        self.status_label.configure(height=3)
         self.set_message("status", "status_opening")
         self.set_button("camera_button", "stop_camera")
         self.camera = Camera(self.args.camera)
@@ -417,7 +455,12 @@ class PointerApp:
         self.disable_input()
         self.set_button("camera_button", "open_camera", state="disabled")
         self.set_message("mode", "mode_input_off")
+        self.status_label.configure(height=0 if message == "camera_error_detail" else 3)
         self.set_message("status", message, **fields)
+        if message == "status_stopping":
+            self.set_footer_notice()
+        else:
+            self.set_footer_notice(CAMERA_BRIEF_MESSAGES.get(message, message))
 
     def toggle_pointer(self):
         if self.active:
@@ -426,6 +469,7 @@ class PointerApp:
         if not self.can_enable or self.mouse.emergency_requested():
             return
         self.safety_notice = ""
+        self.set_footer_notice()
         self.recenter_held = self.mouse.recenter_requested()
         self.last_active_face_at = monotonic()
         self.active = True
@@ -474,6 +518,7 @@ class PointerApp:
     def pause_for_safety(self, message):
         self.safety_notice = message
         self.reset_to_preview(message)
+        self.set_footer_notice(f"{message}_brief")
 
     def update_tracking(self, now, sample):
         calibrating = not self.tracker.calibrated
@@ -509,8 +554,11 @@ class PointerApp:
         if self.settings.motion_only and result.state in ("calibrating", "rearming"):
             hint += "_motion"
         keys = (self.safety_notice, hint) if self.safety_notice else (hint,)
-        if self.messages.get("status") != (keys, {}):
-            self.set_message("status", *keys)
+        fields = {}
+        if result.state == "calibrating":
+            fields["progress"] = int(result.calibration_progress * 10) * 10
+        if self.messages.get("status") != (keys, fields):
+            self.set_message("status", *keys, **fields)
         if self.settings.dwell_seconds is not None:
             self.dwell_bar.configure(value=result.dwell_progress * 100)
         if result.position is not None:
@@ -557,7 +605,9 @@ class PointerApp:
                 self.set_button("camera_button", "open_camera", state="normal")
                 self.set_message("mode", "mode_camera_off")
                 if error is None:
+                    self.status_label.configure(height=3)
                     self.set_message("status", "status_camera_off")
+                    self.set_footer_notice()
             elif latest and not self.camera.stop_event.is_set():
                 captured_at, sample = latest
                 try:
@@ -581,6 +631,7 @@ class PointerApp:
                 except OSError as error:
                     self.pause()
                     self.set_message("last_gesture", "input_stopped", detail=str(error))
+                    self.set_footer_notice("input_stopped_brief")
         self.root.after(16, self.poll)
 
     def close(self):
