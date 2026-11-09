@@ -1,14 +1,18 @@
 # Nose Pointer
 
-Управление мышью Windows через обычную веб-камеру. Небольшие движения носом перемещают указатель. Подмигивание левым или правым глазом вызывает соответствующий щелчок, когда глаз снова открывается. Проект рассчитан на людей, которым трудно пользоваться мышью руками.
+[English](#english) · [Русский](#русский)
 
-*Windows webcam pointer for hands-free control. Nose movement steers the cursor, and intentional left or right winks click. Includes a practice mode and a global F8 pause.*
+Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-## Запуск на Windows
+**[Download the Windows ZIP (v0.6.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.6.0.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.6.0)
 
-Нужны 64-битная Windows 10/11 (x64), веб-камера и [uv](https://docs.astral.sh/uv/getting-started/installation/). Распакуйте скачанный с GitHub ZIP или клонируйте репозиторий. Откройте **Start Nose Pointer.cmd**. При первом запуске он подготовит Python 3.12, установит зафиксированные зависимости и загрузит модель MediaPipe с проверкой SHA-256. После настройки камера и распознавание работают локально.
+## English
 
-Из терминала можно выполнить те же шаги:
+### Install on Windows
+
+You need Windows 10 or 11 (x64), a webcam, and [uv](https://docs.astral.sh/uv/getting-started/installation/). Extract the ZIP and double-click **Start Nose Pointer.cmd**. The first run needs internet access to set up Python 3.12, the pinned dependencies, and the MediaPipe model. The launcher verifies the model with SHA-256. Camera tracking runs locally after setup.
+
+To install and launch from PowerShell, run these commands in the extracted folder.
 
 ```powershell
 uv sync --locked --python 3.12
@@ -16,56 +20,116 @@ uv run --locked nose_pointer.py --download-model
 uv run --locked nose_pointer.py
 ```
 
-## Первое использование
+### Start in practice mode
 
-1. Нажмите **Открыть камеру**. В режиме пробы зелёная точка движется в окне, а настоящий курсор остаётся под вашим обычным управлением.
-2. Смотрите прямо с открытыми глазами, пока приложение калибрует центральную точку. Попробуйте движения носом, затем подмигните одним глазом примерно на четверть секунды и откройте его. Под тестовым полем появится сторона распознанного клика.
-3. Нажмите **Включить мышь** и снова посмотрите прямо для калибровки. Текущее положение указателя станет опорной точкой. Двигайте носом, чтобы перемещаться по рабочей области Windows, включая дополнительные мониторы. Держите оба глаза открытыми между кликами.
-4. Чтобы вернуть управление обычной мыши, нажмите **F8** в любом окне. Также можно нажать **Esc** в приложении, использовать кнопку **Пауза** или закрыть программу. Кнопка **Выключить камеру** прекращает захват.
+The current app uses Russian labels. The steps below include the captions shown in the window.
 
-Если сменили позу, нажмите **F9** при включённой мыши и посмотрите прямо. Ввод приостанавливается на время калибровки и возобновляется с текущей позиции указателя.
+1. Select **Открыть камеру** (Open camera). The green dot is a practice pointer. Your Windows cursor stays under your usual control.
+2. Look straight ahead while the app calibrates. Keep both eyes open in the click modes. Try moving the dot, then hold a wink for about a quarter of a second and open the eye. The app shows the recognized click below the practice area.
+3. Choose your click mode and sensitivity while still in practice mode. Select **Включить мышь** (Enable mouse) when ready. Calibration uses the current cursor position as its starting point, and the pointer can reach across multiple monitors.
+4. Press **F8** from any window to pause. You can also press **Esc** in Nose Pointer, select **Пауза** (Pause), or close the app. **Выключить камеру** (Turn off camera) stops capture.
 
-Обычное моргание двумя глазами, слишком короткое или слишком долгое закрытие одного глаза игнорируются. На время подмигивания указатель фиксируется. При краткой потере лица ввод приостанавливается и возобновляется, когда лицо снова в кадре. В режимах клика держите оба глаза открытыми для возобновления. Если лицо потеряно примерно на пять секунд, программа вернётся в режим пробы. После калибровки снова нажмите **Включить мышь**.
+### Choose how to click
 
-Если во время такой паузы указатель переместили другим устройством, Nose Pointer повторит калибровку на его новой позиции перед возобновлением ввода.
+Use **Режим клика** (Click mode) in practice mode.
 
-Оставляйте в кадре одного человека. Если распознано несколько лиц или лицо резко сместилось между кадрами, системный ввод выключается. Останьтесь в кадре, дождитесь калибровки в режиме пробы и снова нажмите **Включить мышь**.
+- **Подмигивание** (Wink). Wink with the left or right eye and reopen it to send the corresponding click. The pointer holds still during the wink. Blinking both eyes and closing one eye for too short or too long a time produce no click.
+- **Задержка курсора** (Dwell). Move to a target and hold the pointer there. The progress bar tracks the delay, which defaults to 1.2 seconds and can be set from 0.6 to 5 seconds. Move away before the next click. For one right click, select **Правый клик** (Right click), then move to the target and dwell. You can select that button with a regular dwell click when system control is enabled. The next dwell returns to left-click behavior. Select **Отменить** (Cancel) to clear the choice.
+- **Только движение** (Motion only). Use nose movement for the pointer and another device for clicks. Eye closure does not affect calibration or movement in this mode.
 
-### Левый клик без подмигивания
+### Recalibrate and recover
 
-В режиме пробы выберите **Режим клика → Задержка курсора**. Сначала переместите точку к цели и удерживайте её на месте. По умолчанию нужно 1,2 секунды. Под режимом можно выбрать задержку от 0,6 до 5 секунд. Полоса показывает ход отсчёта. Чтобы кликнуть снова, отведите точку и остановитесь у цели. При потере лица или паузе отсчёт сбрасывается. Для левого и правого кликов подмигиванием выберите **Подмигивание**.
+Press **F9** with system control enabled to recalibrate from the current cursor position. In practice mode, use **Чувствительность** (Sensitivity) to tune the amount of head movement. **Высокая** (High) needs less movement, and **Низкая** (Low) gives finer control. Changing sensitivity starts a fresh calibration.
 
-Для одного правого клика нажмите **Правый клик**. При включённой мыши эту кнопку можно нажать обычным кликом по задержке. Затем переместите указатель к цели и снова задержитесь. После правого клика задержка снова даёт левый клик. Кнопка **Отменить** или потеря отслеживания сбрасывают выбор.
+A short loss of tracking pauses input. Keep your face in view and, in the click modes, open both eyes to resume. If another device moved the cursor during the pause, the app recalibrates at that location. After five seconds without an accepted face frame, Nose Pointer returns to practice mode and requires explicit re-enabling. The app also disables system input when it detects multiple faces or an abrupt face jump. Keep one person in view. Tracking loss or a pause clears dwell progress and any pending right click.
 
-### Только движение указателя
-
-Выберите **Режим клика → Только движение** в режиме пробы. Указатель будет следовать за носом, а клики можно выполнять другим устройством. Положение век в этом режиме не влияет на калибровку и перемещение.
-
-### Настройка
-
-В режиме пробы выберите **Чувствительность → Высокая**, если удобнее двигать головой на небольшое расстояние. Если точка перемещается слишком резко, попробуйте **Низкую**. После переключения снова посмотрите прямо для калибровки, затем проверьте перемещение на зелёной точке.
+### Advanced settings
 
 ```powershell
 uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-ms 300
 ```
 
-- `--camera 1` выбирает другую камеру. Значение по умолчанию `0`.
-- Меньшие `--range-x` и `--range-y` повышают чувствительность. Числа обозначают долю ширины и высоты кадра от центра до края экрана. Если заданные значения отличаются от готовых настроек, в списке **Чувствительность** появится пункт **Своя**.
-- `--wink-ms` задаёт минимальную длительность подмигивания. По умолчанию это 220 мс.
-- `--dwell-ms 1600` открывает режим задержки и задаёт время ожидания от 600 до 5000 мс.
-- `--no-mirror` меняет горизонтальное направление. `--swap-buttons` меняет клики местами в режиме подмигивания. `--no-clicks` оставляет только движение указателя.
+- `--camera 1` selects another webcam. The default index is `0`.
+- `--range-x` and `--range-y` set the fraction of the frame you move from the neutral pose to reach a screen edge. Smaller values increase sensitivity. A custom pair appears as **Своя** (Custom) in the sensitivity menu.
+- `--wink-ms` sets the minimum wink duration. The default is 220 ms.
+- `--dwell-ms 1600` starts in dwell mode. The supported range is 600–5000 ms.
+- `--no-mirror` reverses the horizontal mapping. `--swap-buttons` swaps the left and right wink actions. `--no-clicks` starts and locks the app in motion-only mode.
 
-## Обработка данных и состояние проекта
+### Privacy and testing
 
-Кадры камеры остаются в оперативной памяти. Из камеры в интерфейс передаются только результаты распознавания. Программа не сохраняет фото и видео и не отправляет кадры по сети. Сетевой доступ используется для установки и явного скачивания модели.
+Nose Pointer uses Python, Tkinter, OpenCV, [MediaPipe Face Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker/python), and Windows input APIs. Camera frames stay in memory on your computer for local processing. This is an early prototype. Recognition depends on your camera, lighting, and range of motion, so try the practice area before enabling system control.
 
-Это ранний прототип. Стабильность жестов зависит от камеры, освещения и того, насколько удобно пользователю подмигивать по одному глазу. Режим пробы позволяет проверить это до включения управления. Клики распознаются по [MediaPipe Face Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker/python), системный ввод отправляется средствами Windows.
-
-## Проверки
+After setup, these commands check the app while the webcam stays off.
 
 ```powershell
 uv run --locked python -m unittest discover -s tests -v
 uv run --locked nose_pointer.py --check
 ```
 
-Тесты проверяют калибровку, границы, фильтрацию морганий, клики подмигиванием и задержкой, а также потерю лица на искусственных данных. Команда `--check` загружает модель и обрабатывает пустой кадр без доступа к камере и мыши.
+The tests use synthetic face samples and mocked system input. The model check processes a blank image with the local model. See the [MIT license](LICENSE).
+
+## Русский
+
+[К английской версии](#english)
+
+Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
+
+**[Скачать ZIP для Windows (v0.6.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.6.0.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.6.0)
+
+### Запуск на Windows
+
+Нужны 64-битная Windows 10 или 11 (x64), веб-камера и [uv](https://docs.astral.sh/uv/getting-started/installation/). Распакуйте архив и откройте **Start Nose Pointer.cmd**. Для первого запуска нужен интернет. Программа установит Python 3.12 и зафиксированные зависимости, скачает модель MediaPipe и проверит её SHA-256. После настройки распознавание работает локально.
+
+Для запуска из PowerShell выполните эти команды в распакованной папке.
+
+```powershell
+uv sync --locked --python 3.12
+uv run --locked nose_pointer.py --download-model
+uv run --locked nose_pointer.py
+```
+
+### Первое использование
+
+1. Нажмите **Открыть камеру**. В режиме пробы зелёная точка движется в окне, а курсор Windows остаётся под вашим обычным управлением.
+2. Смотрите прямо во время калибровки. В режимах клика держите оба глаза открытыми. Попробуйте подвигать точку, затем подмигните одним глазом примерно на четверть секунды и откройте его. Под тестовым полем появится сторона распознанного клика.
+3. Подберите режим клика и чувствительность в режиме пробы. Нажмите **Включить мышь**, когда будете готовы. Текущая позиция указателя станет опорной точкой. Управление охватывает и дополнительные мониторы.
+4. Для паузы нажмите **F8** в любом окне. Также можно нажать **Esc** в приложении, выбрать **Пауза** или закрыть окно. Кнопка **Выключить камеру** останавливает захват.
+
+### Режимы клика
+
+Выберите **Режим клика** в режиме пробы.
+
+- **Подмигивание.** Подмигните левым или правым глазом и откройте его, чтобы выполнить соответствующий клик. Указатель удерживается на месте во время жеста. Моргание двумя глазами, слишком короткое или слишком долгое подмигивание не вызывают клик.
+- **Задержка курсора.** Подведите указатель к цели и задержитесь. Полоса показывает ход отсчёта. По умолчанию задержка составляет 1,2 секунды, доступный диапазон от 0,6 до 5 секунд. Для следующего клика сначала отведите указатель. Для разового правого клика нажмите **Правый клик**, затем переместите указатель к цели и снова задержитесь. При включённой мыши эту кнопку можно нажать обычным кликом по задержке. После правого клика задержка снова даёт левый клик. Кнопка **Отменить** сбрасывает выбор.
+- **Только движение.** Двигайте указатель носом и используйте другое устройство для кликов. Положение век не влияет на калибровку или движение в этом режиме.
+
+### Калибровка и восстановление управления
+
+При включённой мыши нажмите **F9**, чтобы заново откалибровать управление с текущей позиции указателя. В режиме пробы настройте **Чувствительность**. **Высокая** требует меньших движений головы, а **Низкая** помогает точнее наводить указатель. Смена чувствительности запускает калибровку заново.
+
+При краткой потере отслеживания ввод приостанавливается. Верните лицо в кадр и откройте оба глаза, если используете режим клика. Если за время паузы указатель переместили другим устройством, программа откалибруется на новом месте. Через пять секунд без принятого кадра с лицом приложение возвращается в режим пробы. Для возобновления системного ввода снова нажмите **Включить мышь**. Программа также отключает ввод при нескольких лицах в кадре или резком смещении лица. Оставляйте в кадре одного человека. Потеря отслеживания или пауза отменяет отсчёт задержки и выбранный правый клик.
+
+### Дополнительные настройки
+
+```powershell
+uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-ms 300
+```
+
+- `--camera 1` выбирает другую веб-камеру. По умолчанию используется индекс `0`.
+- `--range-x` и `--range-y` задают долю кадра, которую нужно пройти от нейтральной позиции до края экрана. Меньшие значения повышают чувствительность. Своя пара значений появится в списке **Чувствительность** как **Своя**.
+- `--wink-ms` задаёт минимальную длительность подмигивания. По умолчанию это 220 мс.
+- `--dwell-ms 1600` открывает режим задержки и задаёт время ожидания от 600 до 5000 мс.
+- `--no-mirror` меняет горизонтальное направление. `--swap-buttons` меняет местами левый и правый клики подмигиванием. `--no-clicks` запускает приложение в режиме **Только движение** и блокирует выбор других режимов.
+
+### Приватность и проверки
+
+Приложение использует Python, Tkinter, OpenCV, [MediaPipe Face Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker/python) и системный ввод Windows. Кадры обрабатываются локально и остаются в оперативной памяти компьютера. Это ранний прототип. На распознавание влияют камера, освещение и доступная амплитуда движений, поэтому сначала попробуйте управление в тестовом поле.
+
+После установки эти команды проверяют работу приложения при выключенной камере.
+
+```powershell
+uv run --locked python -m unittest discover -s tests -v
+uv run --locked nose_pointer.py --check
+```
+
+В тестах используются синтетические данные о лице и заглушки системного ввода. Проверка модели обрабатывает пустое изображение с локальной моделью. См. [лицензию MIT](LICENSE).
