@@ -59,9 +59,10 @@ class PreviewTests(unittest.TestCase):
         self.buttons = [Mock(), Mock(), Mock()]
         with (
             patch.multiple("nose_pointer.tk", Frame=Mock(), Label=Mock(),
-                           Canvas=Mock(return_value=pad), StringVar=StringValue),
+                           Canvas=Mock(side_effect=[Mock(), pad]), StringVar=StringValue),
             patch.multiple("nose_pointer.ttk", Style=Mock(), Button=Mock(side_effect=self.buttons),
-                           Combobox=Mock(side_effect=[Mock(), Mock(), Mock(), Mock()]), Progressbar=Mock()),
+                           Combobox=Mock(side_effect=[Mock(), Mock(), Mock(), Mock()]), Progressbar=Mock(),
+                           Scrollbar=Mock()),
         ):
             return PointerApp(self.root, self.mouse, settings,
                               SimpleNamespace(camera=0, no_clicks=no_clicks, swap_buttons=False))

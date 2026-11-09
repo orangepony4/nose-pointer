@@ -72,8 +72,23 @@ class PointerApp:
 
         style = ttk.Style(root)
         style.configure("TButton", font=("Segoe UI", 10), padding=(10, 8))
-        frame = tk.Frame(root, bg=BACKGROUND, padx=26, pady=22)
-        frame.pack(fill="both", expand=True)
+        shell = tk.Frame(root, bg=BACKGROUND, padx=26, pady=22)
+        shell.pack(fill="both", expand=True)
+        shell.columnconfigure(0, weight=1)
+        shell.rowconfigure(0, weight=1)
+        self.workspace = tk.Canvas(shell, bg=BACKGROUND, highlightthickness=0, takefocus=False)
+        self.workspace.grid(row=0, column=0, sticky="nsew")
+        self.workspace_scrollbar = ttk.Scrollbar(shell, orient="vertical", command=self.workspace.yview,
+                                                 takefocus=False)
+        self.workspace_scrollbar.grid(row=0, column=1, sticky="ns", padx=(8, 0))
+        self.workspace_scrollbar.grid_remove()
+        self.workspace.configure(yscrollcommand=self.workspace_scrollbar.set)
+        self.workspace_body = tk.Frame(self.workspace, bg=BACKGROUND)
+        self.workspace_body.columnconfigure(0, weight=1)
+        self.workspace_body.rowconfigure(0, weight=1)
+        self.workspace_window = self.workspace.create_window(0, 0, anchor="nw", window=self.workspace_body)
+        frame = tk.Frame(self.workspace_body, bg=BACKGROUND)
+        frame.grid(row=0, column=0, sticky="nsew")
         header = tk.Frame(frame, bg=BACKGROUND)
         header.pack(fill="x")
         tk.Label(header, text="Nose Pointer", font=("Segoe UI", 26, "bold"),
@@ -111,7 +126,7 @@ class PointerApp:
         gesture_label.bind("<Configure>", lambda event: gesture_label.configure(wraplength=event.width))
 
         settings_controls = tk.Frame(frame, bg=BACKGROUND)
-        settings_controls.pack(fill="x", pady=(0, 12))
+        settings_controls.pack(fill="x", pady=(0, 4))
         sensitivity_row = tk.Frame(settings_controls, bg=BACKGROUND)
         sensitivity_row.pack(fill="x", pady=(0, 8))
         self.make_label(sensitivity_row, "sensitivity", font=("Segoe UI", 10), fg=INK).pack(side="left", padx=(0, 9))
@@ -148,7 +163,9 @@ class PointerApp:
         self.dwell_bar = ttk.Progressbar(self.dwell_controls, length=65, maximum=100, mode="determinate")
         self.dwell_bar.pack(side="left", fill="x", expand=True, padx=(12, 9))
 
-        controls = tk.Frame(frame, bg=BACKGROUND)
+        footer = tk.Frame(shell, bg=BACKGROUND)
+        footer.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        controls = tk.Frame(footer, bg=BACKGROUND)
         controls.pack(fill="x")
         self.camera_button = ttk.Button(controls, text=self.text("open_camera"), command=self.toggle_camera)
         self.camera_button.pack(side="left", padx=(0, 8))
@@ -157,13 +174,72 @@ class PointerApp:
         self.right_dwell_button = ttk.Button(self.dwell_controls, command=self.toggle_right_dwell)
         self.right_dwell_button.bind("<ButtonRelease-3>", self.cancel_right_dwell)
         self.show_click_instructions()
-        self.make_label(frame, "hotkeys", font=("Segoe UI", 10, "bold"), fg=INK,
+        self.make_label(footer, "hotkeys", font=("Segoe UI", 10, "bold"), fg=INK,
                         anchor="w", justify="left", wraplength=430).pack(fill="x", pady=(9, 0))
         privacy_key = "privacy_no_clicks" if args.no_clicks else "privacy"
-        self.make_label(frame, privacy_key, font=("Segoe UI", 9), fg=MUTED, anchor="w",
+        self.make_label(footer, privacy_key, font=("Segoe UI", 9), fg=MUTED, anchor="w",
                         justify="left", wraplength=430).pack(fill="x", pady=(4, 0))
+        self.workspace.bind("<Configure>", self.resize_workspace)
+        self.workspace_body.bind("<Configure>", self.resize_workspace)
+        root.bind("<FocusIn>", self.reveal_workspace_focus, add="+")
+        root.bind("<MouseWheel>", self.scroll_workspace_wheel, add="+")
+        root.bind("<Prior>", lambda _event: self.scroll_workspace(-1, "pages"))
+        root.bind("<Next>", lambda _event: self.scroll_workspace(1, "pages"))
+        # In a scrolling workspace, a wheel over a picker should scroll the view.
+        for picker in (self.language_picker, self.sensitivity_picker, self.mode_picker, self.delay_picker):
+            picker.bind("<MouseWheel>", self.scroll_workspace_wheel, add="+")
         self.camera_button.focus_set()
         root.after(16, self.poll)
+
+    def resize_workspace(self, _event=None):
+        viewport = self.workspace
+        width, visible_height = viewport.winfo_width(), viewport.winfo_height()
+        # Allow the natural layout to grow when optional settings appear.
+        self.workspace_body.rowconfigure(0, minsize=visible_height)
+        height = self.workspace_body.winfo_height()
+        viewport.itemconfigure(self.workspace_window, width=width)
+        viewport.configure(scrollregion=(0, 0, width, height))
+        if height > visible_height:
+            self.workspace_scrollbar.grid()
+            self.reveal_workspace_focus()
+        else:
+            self.workspace_scrollbar.grid_remove()
+            viewport.yview_moveto(0)
+
+    def in_workspace(self, widget):
+        while widget is not None:
+            if widget is self.workspace:
+                return True
+            widget = getattr(widget, "master", None)
+        return False
+
+    def reveal_workspace_focus(self, event=None):
+        widget = event.widget if event is not None else self.root.focus_get()
+        if not self.in_workspace(widget) or not widget.winfo_ismapped():
+            return
+        viewport = self.workspace
+        scroll_top = viewport.canvasy(0)
+        view_height = viewport.winfo_height()
+        top = widget.winfo_rooty() - viewport.winfo_rooty()
+        bottom = top + widget.winfo_height()
+        if top < 0:
+            offset = top
+        elif bottom > view_height:
+            offset = bottom - view_height
+        else:
+            return
+        content_height = self.workspace_body.winfo_height()
+        viewport.yview_moveto((scroll_top + offset) / content_height)
+
+    def scroll_workspace_wheel(self, event):
+        if event.delta:
+            direction = -1 if event.delta > 0 else 1
+            return self.scroll_workspace(direction * max(1, abs(event.delta) // 120), "units")
+
+    def scroll_workspace(self, amount, units):
+        if self.workspace_scrollbar.winfo_ismapped():
+            self.workspace.yview_scroll(amount, units)
+            return "break"
 
     def text(self, key, **fields):
         return translate(self.language, key, **fields)
