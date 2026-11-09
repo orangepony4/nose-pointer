@@ -404,7 +404,7 @@ class PreviewTests(unittest.TestCase):
         for time in (1.8, 1.98, 2.16, 2.34, 2.42):
             self.feed(time)
         self.assertEqual(self.mouse.click.call_args_list, [call("right"), call("left")])
-        self.assertEqual(self.mouse.position.call_count, 2)
+        self.assertEqual(self.mouse.position.call_count, 4)
 
     def test_dwell_click_is_cancelled_when_windows_clamps_the_pointer(self):
         self.select_quick_dwell()
@@ -416,19 +416,42 @@ class PreviewTests(unittest.TestCase):
             self.mouse.position.return_value = (0.25, 0.25)
             return x, y
 
-        self.mouse.move.side_effect = clipped_move
         for time in (0.9, 1.08, 1.26, 1.44):
             self.feed(time, MOVED_FACE)
         self.mouse.position.assert_not_called()
+        self.mouse.move.side_effect = clipped_move
         self.feed(1.52, MOVED_FACE)
 
-        self.mouse.position.assert_called_once()
+        self.assertEqual(self.mouse.position.call_count, 2)
         self.mouse.click.assert_not_called()
         self.assertFalse(self.app.active)
         self.assertIsNone(self.app.right_dwell_armed_at)
         self.assertEqual(self.app.safety_notice, "safety_pointer_moved")
         self.assertIn("Click cancelled", self.app.status.get())
         self.assertIn("Right click cancelled", self.app.last_gesture.get())
+        self.app.dwell_bar.configure.assert_called_with(value=0)
+
+    def test_dwell_click_does_not_move_back_to_target_after_external_cursor_movement(self):
+        self.select_quick_dwell()
+        self.arm_system_pointer()
+        self.app.toggle_right_dwell()
+        self.feed(0.8)
+        for time in (0.9, 1.08, 1.26, 1.44):
+            self.feed(time, MOVED_FACE)
+        self.mouse.position.assert_not_called()
+        self.mouse.click.assert_not_called()
+        self.mouse.reset_mock()
+        external_position = (0.25, 0.25)
+        self.mouse.position.return_value = external_position
+
+        self.feed(1.52, MOVED_FACE)
+
+        self.mouse.position.assert_called_once()
+        self.assert_no_system_input()
+        self.assertEqual(self.mouse.position.return_value, external_position)
+        self.assertFalse(self.app.active)
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.assertEqual(self.app.safety_notice, "safety_pointer_moved")
         self.app.dwell_bar.configure.assert_called_with(value=0)
 
     def test_wink_click_is_cancelled_after_another_device_moves_the_pointer(self):

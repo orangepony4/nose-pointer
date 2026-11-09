@@ -531,6 +531,12 @@ class PointerApp:
         self.reset_to_preview(message)
         self.set_footer_notice(f"{message}_brief")
 
+    def cancel_click_if_pointer_moved(self):
+        if self.mouse.position() == self.last_applied_position:
+            return False
+        self.pause_for_safety("safety_pointer_moved")
+        return True
+
     def update_tracking(self, now, sample):
         calibrating = not self.tracker.calibrated
         anchor = self.mouse.position() if self.active and calibrating and sample is not None else None
@@ -572,23 +578,27 @@ class PointerApp:
             self.set_message("status", *keys, **fields)
         if self.settings.dwell_seconds is not None:
             self.dwell_bar.configure(value=result.dwell_progress * 100)
+        click = None if self.args.no_clicks or self.settings.motion_only else result.click
+        system_click = self.active and click is not None
         if result.position is not None:
+            # Check before a dwell frame can overwrite movement from another device.
+            if system_click and self.cancel_click_if_pointer_moved():
+                return
             if self.position != result.position:
                 self.position = result.position
                 self.draw_pad()
             if self.active:
                 self.last_applied_position = anchor if calibrating else self.mouse.move(*result.position)
-        if result.click and not (self.args.no_clicks or self.settings.motion_only):
-            if self.active and self.mouse.position() != self.last_applied_position:
-                self.pause_for_safety("safety_pointer_moved")
+        if click is not None:
+            if system_click and self.cancel_click_if_pointer_moved():
                 return
-            button = result.click
+            button = click
             if self.settings.dwell_seconds is not None and self.right_dwell_armed_at is not None:
                 button = "right"
                 self.clear_right_dwell(message=None)
             elif self.args.swap_buttons and self.settings.dwell_seconds is None:
                 button = "right" if button == "left" else "left"
-            if self.active:
+            if system_click:
                 self.mouse.click(button)
             mode = "active" if self.active else "preview"
             self.set_message("last_gesture", f"gesture_{mode}_{button}")
