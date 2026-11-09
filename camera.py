@@ -120,6 +120,7 @@ class Camera:
 
             with create_landmarker(mp) as landmarker:
                 opened = False
+                read_failure = None
                 for backend in (cv2.CAP_DSHOW, cv2.CAP_MSMF):
                     if self.stop_event.is_set():
                         return
@@ -127,10 +128,14 @@ class Camera:
                     try:
                         if not self.stop_event.is_set() and capture.isOpened():
                             opened = True
-                            self._capture_frames(capture, cv2, mp, landmarker)
+                            failure = self._capture_frames(capture, cv2, mp, landmarker)
+                            if failure is not None and (read_failure is None or str(failure)):
+                                read_failure = failure
                     finally:
                         capture.release()
                 if not self.stop_event.is_set():
+                    if read_failure is not None:
+                        raise read_failure
                     raise CameraError("camera_no_frames" if opened else "camera_unavailable")
         except Exception as error:
             detail = str(error)
@@ -145,7 +150,15 @@ class Camera:
         last_timestamp = -1
         failures = 0
         while not self.stop_event.is_set():
-            ok, frame = capture.read()
+            try:
+                ok, frame = capture.read()
+            except (OSError, cv2.error) as error:
+                if self.stop_event.is_set():
+                    return
+                if last_timestamp != -1:
+                    raise
+                # The alternate backend may still deliver its first frame.
+                return error
             captured_at = monotonic()
             if self.stop_event.is_set():
                 return

@@ -203,8 +203,10 @@ class PointerApp:
         self.right_dwell_button = ttk.Button(self.dwell_controls, command=self.toggle_right_dwell)
         self.right_dwell_button.bind("<ButtonRelease-3>", self.cancel_right_dwell)
         self.show_click_instructions()
-        self.make_label(footer, "hotkeys", font=("Segoe UI", 10, "bold"), fg=INK,
-                        anchor="w", justify="left", wraplength=430).pack(fill="x", pady=(9, 0))
+        hotkey_label = self.make_label(footer, "hotkeys", font=("Segoe UI", 10, "bold"), fg=INK,
+                                       anchor="w", justify="left", wraplength=430)
+        hotkey_label.pack(fill="x", pady=(9, 0))
+        hotkey_label.bind("<Configure>", lambda event: hotkey_label.configure(wraplength=event.width))
         privacy_key = "privacy_no_clicks" if args.no_clicks else "privacy"
         privacy_label = self.make_label(footer, privacy_key, font=("Segoe UI", 9), fg=MUTED,
                                         anchor="w", justify="left", wraplength=430)

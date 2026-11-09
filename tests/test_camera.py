@@ -17,6 +17,10 @@ DIRECTSHOW = 700
 MEDIA_FOUNDATION = 1400
 
 
+class FakeCaptureError(Exception):
+    pass
+
+
 def result(landmarks, blendshapes):
     return SimpleNamespace(face_landmarks=landmarks, face_blendshapes=blendshapes)
 
@@ -28,7 +32,16 @@ class CameraTests(unittest.TestCase):
         capture.read.return_value = (False, None)
         return capture
 
-    def run_camera(self, camera, primary, alternate, *, has_face=True):
+    def give_one_frame(self, camera, capture):
+        def read():
+            if capture.read.call_count == 1:
+                return True, object()
+            camera.stop()
+            return False, None
+
+        capture.read.side_effect = read
+
+    def run_camera(self, camera, primary, alternate, *, has_face=True, inference_error=None):
         def open_capture(index, backend):
             self.assertEqual(index, camera.index)
             if backend == DIRECTSHOW:
@@ -40,10 +53,12 @@ class CameraTests(unittest.TestCase):
         cv2 = SimpleNamespace(
             VideoCapture=Mock(side_effect=open_capture), CAP_DSHOW=DIRECTSHOW, CAP_MSMF=MEDIA_FOUNDATION,
             CAP_PROP_FRAME_WIDTH=3, CAP_PROP_FRAME_HEIGHT=4, COLOR_BGR2RGB=5, cvtColor=Mock(),
+            error=FakeCaptureError,
         )
         mediapipe = SimpleNamespace(Image=Mock(), ImageFormat=SimpleNamespace(SRGB=1))
         landmarker = Mock()
         landmarker.detect_for_video.return_value = result([NOSE], [BLINKS]) if has_face else result([], [])
+        landmarker.detect_for_video.side_effect = inference_error
         camera.stop_event.wait = Mock()
         with (
             patch.dict("sys.modules", {"cv2": cv2, "mediapipe": mediapipe}),
@@ -55,14 +70,7 @@ class CameraTests(unittest.TestCase):
     def test_no_initial_directshow_frames_fall_back_to_the_same_camera_index(self):
         camera = Camera(3)
         primary, alternate = self.fake_capture(), self.fake_capture()
-
-        def read_frame_then_stop():
-            if alternate.read.call_count == 1:
-                return True, object()
-            camera.stop()
-            return False, None
-
-        alternate.read.side_effect = read_frame_then_stop
+        self.give_one_frame(camera, alternate)
         open_capture, landmarker = self.run_camera(camera, primary, alternate)
         self.assertEqual(open_capture.call_args_list, [call(3, DIRECTSHOW), call(3, MEDIA_FOUNDATION)])
         self.assertEqual(primary.read.call_count, 20)
@@ -72,6 +80,70 @@ class CameraTests(unittest.TestCase):
         landmarker.detect_for_video.assert_called_once()
         self.assertEqual(camera.latest[1], FACE)
         self.assertIsNone(camera.error)
+
+    def test_initial_driver_read_exception_falls_back_to_the_same_camera_index(self):
+        for error_type in (OSError, FakeCaptureError):
+            with self.subTest(error_type=error_type):
+                camera = Camera(2)
+                primary, alternate = self.fake_capture(), self.fake_capture()
+                primary.read.side_effect = error_type("first backend could not read")
+                self.give_one_frame(camera, alternate)
+                open_capture, landmarker = self.run_camera(camera, primary, alternate)
+                self.assertEqual(open_capture.call_args_list, [call(2, DIRECTSHOW), call(2, MEDIA_FOUNDATION)])
+                primary.release.assert_called_once_with()
+                alternate.release.assert_called_once_with()
+                landmarker.detect_for_video.assert_called_once()
+                self.assertEqual(camera.latest[1], FACE)
+                self.assertIsNone(camera.error)
+
+    def test_failed_backends_keep_the_most_recent_nonempty_read_error(self):
+        for alternate_detail in (None, "", "second backend read error"):
+            with self.subTest(alternate_detail=alternate_detail):
+                camera = Camera(0)
+                primary = self.fake_capture()
+                alternate = self.fake_capture(opened=alternate_detail is not None)
+                primary.read.side_effect = OSError("first backend read error")
+                if alternate_detail is not None:
+                    alternate.read.side_effect = FakeCaptureError(alternate_detail)
+                open_capture, _ = self.run_camera(camera, primary, alternate)
+                self.assertEqual(open_capture.call_args_list, [call(0, DIRECTSHOW), call(0, MEDIA_FOUNDATION)])
+                self.assertEqual(camera.error.key, "camera_error_detail")
+                self.assertEqual(camera.error.detail, alternate_detail or "first backend read error")
+                primary.release.assert_called_once_with()
+                alternate.release.assert_called_once_with()
+
+    def test_stop_during_initial_driver_read_exception_does_not_try_another_backend(self):
+        camera = Camera(0)
+        primary, alternate = self.fake_capture(), self.fake_capture()
+
+        def stop_during_read():
+            camera.stop()
+            raise OSError("read interrupted")
+
+        primary.read.side_effect = stop_during_read
+        open_capture, _ = self.run_camera(camera, primary, alternate)
+        open_capture.assert_called_once_with(0, DIRECTSHOW)
+        primary.release.assert_called_once_with()
+        self.assertIsNone(camera.error)
+
+    def test_driver_read_exception_after_first_frame_does_not_switch_backends(self):
+        camera = Camera(0)
+        primary, alternate = self.fake_capture(), self.fake_capture()
+        primary.read.side_effect = [(True, object()), FakeCaptureError("camera disconnected")]
+        open_capture, landmarker = self.run_camera(camera, primary, alternate)
+        open_capture.assert_called_once_with(0, DIRECTSHOW)
+        primary.release.assert_called_once_with()
+        landmarker.detect_for_video.assert_called_once()
+        self.assertEqual(camera.error.detail, "camera disconnected")
+
+    def test_inference_exception_never_switches_backends(self):
+        camera = Camera(0)
+        primary, alternate = self.fake_capture(), self.fake_capture()
+        primary.read.return_value = (True, object())
+        open_capture, _ = self.run_camera(camera, primary, alternate, inference_error=FakeCaptureError("model failed"))
+        open_capture.assert_called_once_with(0, DIRECTSHOW)
+        primary.release.assert_called_once_with()
+        self.assertEqual(camera.error.detail, "model failed")
 
     def test_both_failed_backends_report_whether_any_camera_opened(self):
         for primary_opened, alternate_opened, error in (

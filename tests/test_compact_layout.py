@@ -197,6 +197,23 @@ class CompactLayoutTests(unittest.TestCase):
         self.assert_widget_fits(app.footer_notice_label, app.root)
         self.assertEqual(mouse.mock_calls, [])
 
+    def test_hotkeys_wrap_to_footer_width_and_leave_settings_reachable_at_large_scaling(self):
+        for dpi, screen in ((288, (800, 600)), (384, (1280, 720))):
+            with self.subTest(dpi=dpi, screen=screen):
+                app, mouse = self.open_window(dpi, screen, "ru")
+                app.pause_for_safety("safety_multiple")
+                app.root.update()
+                hotkeys = next(label for label, key in app.static_labels if key == "hotkeys")
+                self.assertEqual(int(hotkeys.cget("wraplength")), hotkeys.winfo_width())
+                self.assertTrue(app.workspace_scrollbar.winfo_ismapped())
+                app.delay_picker.event_generate("<FocusIn>")
+                app.root.update()
+                self.assert_widget_fits(app.delay_picker, app.workspace)
+                self.assert_widget_fits(app.camera_button, app.root)
+                self.assert_widget_fits(app.pointer_button, app.root)
+                self.assert_widget_fits(app.footer_notice_label, app.root)
+                self.assertEqual(mouse.mock_calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()
