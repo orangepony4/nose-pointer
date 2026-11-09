@@ -109,6 +109,34 @@ class TrackingTests(unittest.TestCase):
                 for now, sample in sequence:
                     self.assertIsNone(tracker.update(now, sample).click)
 
+    def test_uncertain_reopening_does_not_extend_the_wink_duration(self):
+        sequences = {
+            "short closure before a slow reopening": (
+                [(0.125, 0.9), (0.1875, 0.9), (0.25, 0.5), (0.375, 0.5), (0.4375, 0.1)], False
+            ),
+            "reopening starts at minimum": (
+                [(0.125, 0.9), (0.25, 0.9), (0.375, 0.5), (0.4375, 0.1)], True
+            ),
+            "directly open at minimum": (
+                [(0.125, 0.9), (0.25, 0.9), (0.375, 0.1)], True
+            ),
+            "transient uncertainty followed by clear closure": (
+                [(0.125, 0.9), (0.1875, 0.9), (0.25, 0.5), (0.3125, 0.9), (0.375, 0.1)], True
+            ),
+            "reopening still incomplete after maximum": (
+                [(0.125, 0.9), (0.25, 0.9), (0.375, 0.5), (0.5625, 0.5),
+                 (0.75, 0.5), (0.9375, 0.5), (1.0, 0.1)], False
+            ),
+        }
+        for side in ("left", "right"):
+            for description, (samples, valid) in sequences.items():
+                with self.subTest(side=side, description=description):
+                    tracker = self.ready_tracker(wink_min_seconds=0.25)
+                    outputs = [tracker.update(now, face(**{side: score})) for now, score in samples]
+                    self.assertTrue(all(output.click is None for output in outputs[:-1]))
+                    self.assertEqual(outputs[-1].click, side if valid else None)
+                    self.assertIsNone(outputs[-1].position)
+
     def test_opposite_eye_or_both_eyes_cancel_a_pending_wink(self):
         for interruption in (face(right=0.9), face(left=0.9, right=0.9), face(left=0.9, right=0.5)):
             with self.subTest(interruption=interruption):

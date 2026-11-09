@@ -828,6 +828,16 @@ class PreviewTests(unittest.TestCase):
         self.assertFalse(self.app.active)
         self.assert_no_system_input()
 
+    def test_short_wink_with_slow_reopening_does_not_send_system_input(self):
+        self.arm_system_pointer()
+        self.feed(0.80, LEFT_WINK)
+        self.feed(0.84, LEFT_WINK)
+        for now in (0.88, 0.97, 1.05):
+            self.feed(now, replace(LEFT_WINK, left_blink=0.5))
+        self.feed(1.06)
+        self.assertTrue(self.app.active)
+        self.assert_no_system_input()
+
     def test_focused_f8_tap_cancels_a_pending_wink_and_held_f8_prevents_reenable(self):
         self.arm_system_pointer()
         self.feed(0.80, LEFT_WINK)

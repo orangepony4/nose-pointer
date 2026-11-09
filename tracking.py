@@ -122,6 +122,7 @@ class Tracker:
         self._wink: Click | None = None
         self._wink_start = 0.0
         self._wink_seen_again = False
+        self._wink_reopening_at: float | None = None
         self.reset_dwell()
 
     def update(
@@ -264,15 +265,21 @@ class Tracker:
             return self._hold("rearming")
         if eyes_open:
             click = None
-            if self._wink_seen_again and now >= self._wink_start + settings.wink_min_seconds:
+            # An uncertain reopening must not make a brief closure count as a wink.
+            closure_end = now if self._wink_reopening_at is None else self._wink_reopening_at
+            if self._wink_seen_again and closure_end >= self._wink_start + settings.wink_min_seconds:
                 click = side
                 self._last_click = now
             self._break_continuity()
             self._open_since = now
             return self._hold("rearming", click)
 
-        if wink_score >= settings.closed_threshold and now > self._wink_start:
-            self._wink_seen_again = True
+        if wink_score >= settings.closed_threshold:
+            if now > self._wink_start:
+                self._wink_seen_again = True
+            self._wink_reopening_at = None
+        elif self._wink_reopening_at is None:
+            self._wink_reopening_at = now
         return self._hold("wink")
 
     def _advance_dwell(
