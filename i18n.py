@@ -1,0 +1,158 @@
+"""English and Russian messages for the desktop app and launcher commands."""
+
+from os import getenv
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+
+LANGUAGES = {"en": "English", "ru": "Русский"}
+
+MESSAGES = {
+    "subtitle": ("Webcam pointer control", "Управление указателем через веб-камеру"),
+    "language": ("Language", "Язык"),
+    "sensitivity": ("Sensitivity", "Чувствительность"),
+    "sensitivity_low": ("Low", "Низкая"),
+    "sensitivity_standard": ("Standard", "Обычная"),
+    "sensitivity_high": ("High", "Высокая"),
+    "sensitivity_custom": ("Custom", "Своя"),
+    "click_mode": ("Click mode", "Режим клика"),
+    "wink": ("Wink", "Подмигивание"),
+    "dwell": ("Dwell", "Задержка курсора"),
+    "motion": ("Motion only", "Только движение"),
+    "dwell_delay": ("Delay (s)", "Задержка, с"),
+    "open_camera": ("Open camera", "Открыть камеру"),
+    "stop_camera": ("Turn off camera", "Выключить камеру"),
+    "enable_mouse": ("Enable mouse", "Включить мышь"),
+    "pause": ("Pause", "Пауза"),
+    "right_click": ("Right click", "Правый клик"),
+    "cancel": ("Cancel", "Отменить"),
+    "hotkeys": ("F8  ·  Pause     F9  ·  Recalibrate", "F8  ·  Пауза     F9  ·  Калибровка"),
+    "privacy": ("Camera frames stay on this computer", "Кадры обрабатываются на этом компьютере"),
+    "privacy_no_clicks": (
+        "Clicks disabled  ·  Camera frames stay on this computer",
+        "Клики отключены  ·  Кадры обрабатываются на этом компьютере",
+    ),
+    "mode_camera_off": ("CAMERA OFF", "КАМЕРА ВЫКЛЮЧЕНА"),
+    "mode_preview": ("PRACTICE  ·  SYSTEM MOUSE OFF", "ПРОБА  ·  СИСТЕМНАЯ МЫШЬ ВЫКЛЮЧЕНА"),
+    "mode_input_off": ("SYSTEM MOUSE OFF", "СИСТЕМНАЯ МЫШЬ ВЫКЛЮЧЕНА"),
+    "mode_active": ("SYSTEM MOUSE ON", "СИСТЕМНАЯ МЫШЬ ВКЛЮЧЕНА"),
+    "status_welcome": (
+        "Open the camera to try the pointer in practice mode.",
+        "Откройте камеру, чтобы проверить управление в режиме пробы.",
+    ),
+    "status_opening": ("Opening the camera…", "Открываем камеру…"),
+    "status_stopping": ("Turning off the camera…", "Камера выключается…"),
+    "status_camera_off": ("Camera off. You can open it again.", "Камера выключена. Её можно открыть снова."),
+    "status_paused": (
+        "Paused. Select Enable mouse to resume control.",
+        "Пауза. Чтобы снова управлять мышью, включите её кнопкой.",
+    ),
+    "status_recenter": (
+        "Calibrating in place. Look straight ahead with both eyes open.",
+        "Калибровка на месте. Смотрите прямо и откройте оба глаза.",
+    ),
+    "status_recenter_motion": ("Calibrating in place. Look straight ahead.", "Калибровка на месте. Смотрите прямо."),
+    "hint_calibrating": (
+        "Look straight ahead and keep both eyes open.",
+        "Смотрите прямо и держите оба глаза открытыми.",
+    ),
+    "hint_calibrating_motion": ("Look straight ahead and stay in view.", "Смотрите прямо и держите лицо в кадре."),
+    "hint_tracking": ("Face in view. Move your nose a little to steer.", "Лицо в кадре. Двигайте носом небольшими движениями."),
+    "hint_wink": ("Wink detected. The pointer waits until you reopen your eye.", "Подмигивание. Точка ждёт, пока глаз откроется."),
+    "hint_rearming": ("Keep both eyes open to continue.", "Держите оба глаза открытыми, чтобы продолжить."),
+    "hint_rearming_motion": ("Keep your face in view to continue.", "Держите лицо в кадре, чтобы продолжить."),
+    "hint_paused": ("Input paused while tracking is unavailable.", "Лицо потеряно или кадры задерживаются. Ввод приостановлен."),
+    "safety_jump": ("Face moved suddenly. System control is off.", "Лицо резко сместилось. Управление выключено."),
+    "safety_loss": ("Face out of view too long. System control is off.", "Лицо долго не было видно. Управление выключено."),
+    "safety_multiple": ("Multiple faces detected. System control is off.", "В кадре несколько лиц. Управление выключено."),
+    "instruction_wink": ("Wink with one eye, then reopen it.", "Подмигните одним глазом и откройте его."),
+    "instruction_motion": ("Move the dot with your nose. Clicks are disabled.", "Двигайте точку носом. Клики отключены."),
+    "instruction_dwell": ("Move the pointer, then hold it still to left-click.", "Переместите точку, затем задержитесь для левого клика."),
+    "right_armed": ("Next click is right. Move to your target.", "Следующий клик — правый. Переместите указатель к цели."),
+    "right_cancelled": ("Right click cancelled.", "Правый клик отменён."),
+    "gesture_active_left": ("System mouse  ·  Left click", "Системная мышь  ·  Левый клик"),
+    "gesture_active_right": ("System mouse  ·  Right click", "Системная мышь  ·  Правый клик"),
+    "gesture_preview_left": ("Practice  ·  Left click", "Проба  ·  Левый клик"),
+    "gesture_preview_right": ("Practice  ·  Right click", "Проба  ·  Правый клик"),
+    "input_stopped": ("Input stopped. {detail}", "Ввод остановлен. {detail}"),
+    "camera_error": ("Camera stopped with an error.", "Камера завершила работу с ошибкой."),
+    "camera_error_detail": ("Camera error. {detail}", "Ошибка камеры. {detail}"),
+    "camera_unavailable": (
+        "Could not open the camera. Check the camera index, permissions and other apps.",
+        "Камеру открыть не удалось. Проверьте разрешения, индекс и другие приложения.",
+    ),
+    "camera_no_frames": ("The camera stopped sending frames.", "Камера перестала передавать кадры."),
+    "model_verify_failed": ("Model verification failed.", "Проверка загруженной модели не прошла."),
+    "model_missing": (
+        "Model missing or damaged. Run setup with --download-model.",
+        "Модель отсутствует или повреждена. Запустите настройку с --download-model.",
+    ),
+    "model_blank_face": ("A face was detected in the blank test image.", "На пустом тестовом кадре обнаружилось лицо."),
+    "model_ready": ("Model ready.", "Модель готова."),
+    "model_check_ok": (
+        "Model check passed. The camera stayed off.",
+        "Модель и обработка кадров работают. Камера оставалась выключенной.",
+    ),
+    "cli_description": (
+        "Hands-free webcam pointer for Windows with a practice mode and emergency pause.",
+        "Управление указателем Windows через веб-камеру с режимом пробы и экстренной паузой.",
+    ),
+    "cli_lang": ("interface language for this launch", "язык интерфейса для этого запуска"),
+    "cli_help": ("show this help message and exit", "показать справку и завершить работу"),
+    "cli_download": ("download and verify the local model", "скачать и проверить локальную модель"),
+    "cli_check": ("run the model on a blank image with the camera off", "проверить модель на пустом изображении без камеры"),
+    "cli_camera": ("webcam index, normally 0", "индекс веб-камеры, обычно 0"),
+    "cli_range_x": ("horizontal nose displacement from center to screen edge", "смещение носа по горизонтали от центра до края экрана"),
+    "cli_range_y": ("vertical nose displacement from center to screen edge", "смещение носа по вертикали от центра до края экрана"),
+    "cli_wink": ("minimum intentional wink duration in milliseconds", "минимальная длительность подмигивания в миллисекундах"),
+    "cli_no_mirror": ("reverse horizontal direction", "изменить направление по горизонтали"),
+    "cli_swap": ("exchange left and right wink actions", "поменять местами левый и правый клики подмигиванием"),
+    "cli_no_clicks": ("enable pointer motion only", "включить только движение указателя"),
+    "cli_dwell": ("start in dwell mode with a 600–5000 ms delay", "открыть режим задержки с интервалом от 600 до 5000 мс"),
+    "cli_dwell_invalid": ("Dwell delay must be between 600 and 5000 ms.", "Задержка клика должна быть от 600 до 5000 мс."),
+    "cli_platform": ("System input is supported on Windows.", "Системный ввод поддерживается в Windows."),
+    "cli_camera_invalid": ("Camera index must be nonnegative.", "Индекс камеры не может быть отрицательным."),
+}
+
+
+def translate(language, key, **fields):
+    english, russian = MESSAGES[key]
+    return (russian if language == "ru" else english).format(**fields)
+
+
+def language_preference_path():
+    app_data = Path(getenv("LOCALAPPDATA", ""))
+    return app_data / "NosePointer" / "language.txt" if app_data.is_absolute() else None
+
+
+def load_language():
+    path = language_preference_path()
+    if path is None:
+        return "en"
+    try:
+        with path.open("rb") as preference:
+            saved = preference.read(5)
+    except OSError:
+        return "en"
+    return "ru" if saved in (b"ru", b"ru\n", b"ru\r\n") else "en"
+
+
+def save_language(language):
+    path = language_preference_path()
+    if path is None or language not in LANGUAGES:
+        return
+
+    temporary = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with NamedTemporaryFile(dir=path.parent, prefix="language-", delete=False) as preference:
+            temporary = Path(preference.name)
+            preference.write((language + "\n").encode("ascii"))
+        temporary.replace(path)
+    except OSError:
+        pass
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass

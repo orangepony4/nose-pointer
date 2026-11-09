@@ -1,5 +1,6 @@
 """Local webcam inference. The UI only receives coordinates and blink scores."""
 
+from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -7,6 +8,7 @@ from threading import Event, Lock, Thread
 from time import monotonic
 from urllib.request import urlopen
 
+from i18n import translate
 from tracking import FaceSample
 
 
@@ -21,6 +23,18 @@ NOSE_TIP = 1
 AMBIGUOUS_FACE = object()
 
 
+class CameraError(RuntimeError):
+    def __init__(self, key):
+        self.key = key
+        super().__init__(translate("en", key))
+
+
+@dataclass(frozen=True)
+class CameraFailure:
+    key: str
+    detail: str = ""
+
+
 def model_is_ready():
     return (MODEL_PATH.is_file() and MODEL_PATH.stat().st_size == MODEL_SIZE
             and sha256(MODEL_PATH.read_bytes()).hexdigest() == MODEL_SHA256)
@@ -32,7 +46,7 @@ def download_model():
     with urlopen(MODEL_URL, timeout=30) as response:
         data = response.read(MODEL_SIZE + 1)
     if len(data) != MODEL_SIZE or sha256(data).hexdigest() != MODEL_SHA256:
-        raise RuntimeError("Проверка загруженной модели не прошла.")
+        raise CameraError("model_verify_failed")
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(dir=MODEL_PATH.parent, delete=False) as temp:
@@ -46,7 +60,7 @@ def download_model():
 
 def create_landmarker(mp):
     if not model_is_ready():
-        raise RuntimeError("Модель отсутствует или повреждена. Запустите настройку с --download-model.")
+        raise CameraError("model_missing")
     vision = mp.tasks.vision
     return vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
         base_options=mp.tasks.BaseOptions(model_asset_path=str(MODEL_PATH)),
@@ -115,7 +129,7 @@ class Camera:
                         return
                     capture = cv2.VideoCapture(self.index, cv2.CAP_MSMF)
                 if not capture.isOpened():
-                    raise RuntimeError("Камеру открыть не удалось. Проверьте разрешения, индекс и другие приложения.")
+                    raise CameraError("camera_unavailable")
 
                 capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
                 capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -128,7 +142,7 @@ class Camera:
                         self.publish(captured_at, None)
                         failures += 1
                         if failures >= 20:
-                            raise RuntimeError("Камера перестала передавать кадры.")
+                            raise CameraError("camera_no_frames")
                         self.stop_event.wait(0.05)
                         continue
                     failures = 0
@@ -139,8 +153,11 @@ class Camera:
                     sample = extract_sample(landmarker.detect_for_video(image, timestamp))
                     self.publish(captured_at, sample)
         except Exception as error:
+            detail = str(error)
+            failure = (CameraFailure(error.key) if isinstance(error, CameraError)
+                       else CameraFailure("camera_error_detail" if detail else "camera_error", detail))
             with self.lock:
-                self.error = str(error)
+                self.error = failure
         finally:
             if capture is not None:
                 capture.release()
@@ -154,4 +171,4 @@ def check_inference():
         pixels = np.zeros((160, 160, 3), dtype=np.uint8)
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=pixels)
         if extract_sample(landmarker.detect_for_video(image, 0)) is not None:
-            raise RuntimeError("На пустом тестовом кадре обнаружилось лицо.")
+            raise CameraError("model_blank_face")

@@ -44,6 +44,7 @@ class PreviewTests(unittest.TestCase):
         self.camera.thread.is_alive.return_value = True
         self.camera.stop_event.is_set.return_value = False
         self.clock = self.enterContext(patch("nose_pointer.monotonic"))
+        self.save_language = self.enterContext(patch("nose_pointer.save_language"))
 
         self.app = self.create_app(Settings(calibration_seconds=0.3, smoothing_seconds=0))
         with patch("nose_pointer.Camera", return_value=self.camera) as factory:
@@ -60,7 +61,7 @@ class PreviewTests(unittest.TestCase):
             patch.multiple("nose_pointer.tk", Frame=Mock(), Label=Mock(),
                            Canvas=Mock(return_value=pad), StringVar=StringValue),
             patch.multiple("nose_pointer.ttk", Style=Mock(), Button=Mock(side_effect=self.buttons),
-                           Combobox=Mock(side_effect=[Mock(), Mock(), Mock()]), Progressbar=Mock()),
+                           Combobox=Mock(side_effect=[Mock(), Mock(), Mock(), Mock()]), Progressbar=Mock()),
         ):
             return PointerApp(self.root, self.mouse, settings,
                               SimpleNamespace(camera=0, no_clicks=no_clicks, swap_buttons=False))
@@ -86,9 +87,76 @@ class PreviewTests(unittest.TestCase):
         self.mouse.click.assert_not_called()
 
     def select_quick_dwell(self):
-        self.app.click_mode.set(DWELL_MODE)
-        self.app.dwell_time.set("0,6")
+        self.app.click_mode.set(self.app.text(DWELL_MODE))
+        self.app.dwell_time.set("0.6")
         self.app.change_click_mode()
+
+    def test_language_switch_preserves_tracking_and_preview_selections(self):
+        self.select_quick_dwell()
+        self.app.sensitivity.set("High")
+        self.app.change_sensitivity()
+        self.calibrate(0)
+        self.feed(0.4, MOVED_FACE)
+        self.app.toggle_right_dwell()
+        tracker, settings = self.app.tracker, self.app.settings
+        position, armed_at = self.app.position, self.app.right_dwell_armed_at
+
+        self.app.language_choice.set("Русский")
+        self.app.change_language()
+        self.assertEqual(self.app.language, "ru")
+        self.assertEqual(self.app.click_mode.get(), "Задержка курсора")
+        self.assertEqual(self.app.sensitivity.get(), "Высокая")
+        self.assertEqual(self.app.dwell_time.get(), "0,6")
+        self.assertIn("Следующий клик — правый", self.app.last_gesture.get())
+        self.assertIs(self.app.tracker, tracker)
+        self.assertIs(self.app.settings, settings)
+        self.assertEqual((self.app.position, self.app.right_dwell_armed_at), (position, armed_at))
+        self.assertTrue(self.app.can_enable)
+        self.assert_no_system_input()
+
+        self.app.language_choice.set("English")
+        self.app.change_language()
+        self.assertEqual(self.app.language, "en")
+        self.assertEqual(self.app.dwell_time.get(), "0.6")
+        self.assertIn("Next click is right", self.app.last_gesture.get())
+        self.assertEqual(self.save_language.call_args_list, [call("ru"), call("en")])
+        self.assert_no_system_input()
+
+    def test_language_control_is_locked_during_system_input(self):
+        self.arm_system_pointer()
+        self.app.language_picker.configure.assert_called_with(state="disabled")
+        self.app.language_choice.set("Русский")
+        self.app.change_language()
+        self.assertEqual(self.app.language, "en")
+        self.assertEqual(self.app.language_choice.get(), "English")
+        self.save_language.assert_not_called()
+
+        self.app.pause()
+        self.app.language_picker.configure.assert_called_with(state="readonly")
+        self.app.language_choice.set("Русский")
+        self.app.change_language()
+        self.assertEqual(self.app.language, "ru")
+        self.assertIn("Пауза", self.app.status.get())
+        self.assert_no_system_input()
+
+    def test_language_switch_retranslates_a_safety_notice_and_a_camera_error(self):
+        self.calibrate(0)
+        self.feed(0.4, camera.AMBIGUOUS_FACE)
+        self.feed(0.5)
+        self.assertIn("Multiple faces detected", self.app.status.get())
+        self.app.language_choice.set("Русский")
+        self.app.change_language()
+        self.assertIn("В кадре несколько лиц", self.app.status.get())
+        self.assertIn("Смотрите прямо", self.app.status.get())
+
+        self.camera.snapshot.return_value = (None, camera.CameraFailure("camera_unavailable"))
+        self.camera.thread.is_alive.return_value = False
+        self.app.poll()
+        self.assertIn("Камеру открыть не удалось", self.app.status.get())
+        self.app.language_choice.set("English")
+        self.app.change_language()
+        self.assertIn("Could not open the camera", self.app.status.get())
+        self.assert_no_system_input()
 
     def test_sensitivity_increases_travel_and_clears_pending_gestures(self):
         self.select_quick_dwell()
@@ -98,7 +166,7 @@ class PreviewTests(unittest.TestCase):
         self.app.toggle_right_dwell()
         self.assertIsNotNone(self.app.right_dwell_armed_at)
 
-        self.app.sensitivity.set("Высокая")
+        self.app.sensitivity.set("High")
         self.app.change_sensitivity()
         self.assertIsNone(self.app.right_dwell_armed_at)
         self.assertEqual(self.app.settings.dwell_seconds, 0.6)
@@ -113,7 +181,7 @@ class PreviewTests(unittest.TestCase):
         self.arm_system_pointer()
         self.app.sensitivity_picker.configure.assert_called_with(state="disabled")
         tracker = self.app.tracker
-        self.app.sensitivity.set("Низкая")
+        self.app.sensitivity.set("Low")
         self.app.change_sensitivity()
         self.assertIs(self.app.tracker, tracker)
         self.app.pause()
@@ -122,12 +190,12 @@ class PreviewTests(unittest.TestCase):
     def test_custom_ranges_are_selectable_again_even_with_clicks_disabled(self):
         settings = replace(self.app.settings, range_x=0.045, range_y=0.075, motion_only=True)
         self.app = self.create_app(settings, no_clicks=True)
-        self.assertEqual(self.app.sensitivity.get(), "Своя")
-        self.app.sensitivity.set("Обычная")
+        self.assertEqual(self.app.sensitivity.get(), "Custom")
+        self.app.sensitivity.set("Standard")
         self.app.change_sensitivity()
         self.assertEqual(self.app.settings.range_x, Settings.range_x)
         self.assertEqual(self.app.settings.range_y, Settings.range_y)
-        self.app.sensitivity.set("Своя")
+        self.app.sensitivity.set("Custom")
         self.app.change_sensitivity()
         self.assertEqual(self.app.settings, settings)
 
@@ -141,7 +209,7 @@ class PreviewTests(unittest.TestCase):
         self.feed(0.5, LEFT_WINK)
         self.feed(0.62, LEFT_WINK)
         self.feed(0.77)
-        self.assertIn("Левый клик", self.app.last_gesture.get())
+        self.assertIn("Left click", self.app.last_gesture.get())
         self.assert_no_system_input()
         self.mouse.position.assert_not_called()
 
@@ -174,13 +242,13 @@ class PreviewTests(unittest.TestCase):
 
     def test_empty_camera_error_disarms_and_reopening_returns_to_preview(self):
         self.arm_system_pointer()
-        self.camera.snapshot.return_value = (None, "")
+        self.camera.snapshot.return_value = (None, camera.CameraFailure("camera_error"))
         self.camera.thread.is_alive.return_value = False
         self.app.poll()
         self.assertIsNone(self.app.camera)
         self.assertFalse(self.app.active)
         self.assertFalse(self.app.can_enable)
-        self.assertIn("ошибкой", self.app.status.get())
+        self.assertIn("error", self.app.status.get())
 
         self.camera.thread.is_alive.return_value = True
         with patch("nose_pointer.Camera", return_value=self.camera):
@@ -203,7 +271,7 @@ class PreviewTests(unittest.TestCase):
     def test_switching_to_dwell_keeps_preview_local_and_clicks_left_only_when_enabled(self):
         self.calibrate(0)
         self.app.args.swap_buttons = True
-        self.app.click_mode.set(DWELL_MODE)
+        self.app.click_mode.set(self.app.text(DWELL_MODE))
         self.app.change_click_mode()
         self.assertFalse(self.app.can_enable)
         self.app.toggle_pointer()
@@ -213,7 +281,7 @@ class PreviewTests(unittest.TestCase):
         for time in (1.00, 1.20, 1.40, 1.60, 1.80, 2.02):
             self.feed(time, MOVED_FACE)
         self.app.dwell_bar.configure.assert_called_with(value=100)
-        self.assertIn("Левый клик", self.app.last_gesture.get())
+        self.assertIn("Left click", self.app.last_gesture.get())
         self.assert_no_system_input()
 
         self.app.toggle_pointer()
@@ -230,12 +298,12 @@ class PreviewTests(unittest.TestCase):
         self.app.dwell_bar.configure.assert_called_with(value=0)
 
     def test_dwell_delay_changes_in_preview_and_is_kept_when_switching_modes(self):
-        self.app.click_mode.set(DWELL_MODE)
+        self.app.click_mode.set(self.app.text(DWELL_MODE))
         self.app.change_click_mode()
         self.calibrate(0)
         self.feed(0.4, MOVED_FACE)
         self.feed(0.6, MOVED_FACE)
-        self.app.dwell_time.set("0,8")
+        self.app.dwell_time.set("0.8")
         self.app.change_click_mode()
         self.assertEqual(self.app.settings.dwell_seconds, 0.8)
         self.assertFalse(self.app.can_enable)
@@ -243,15 +311,15 @@ class PreviewTests(unittest.TestCase):
         self.calibrate(0.7)
         for time in (1.1, 1.28, 1.46, 1.64, 1.82):
             self.feed(time, MOVED_FACE)
-        self.assertNotIn("Левый клик", self.app.last_gesture.get())
+        self.assertNotIn("Left click", self.app.last_gesture.get())
         self.feed(1.91, MOVED_FACE)
-        self.assertIn("Левый клик", self.app.last_gesture.get())
+        self.assertIn("Left click", self.app.last_gesture.get())
         self.assert_no_system_input()
 
-        self.app.click_mode.set(WINK_MODE)
+        self.app.click_mode.set(self.app.text(WINK_MODE))
         self.app.change_click_mode()
         self.assertIsNone(self.app.settings.dwell_seconds)
-        self.app.click_mode.set(DWELL_MODE)
+        self.app.click_mode.set(self.app.text(DWELL_MODE))
         self.app.change_click_mode()
         self.assertEqual(self.app.settings.dwell_seconds, 0.8)
 
@@ -271,7 +339,7 @@ class PreviewTests(unittest.TestCase):
 
         for time in (1.7, 1.88, 2.06, 2.24, 2.32):
             self.feed(time, OPEN_FACE)
-        self.assertIn("Правый клик", self.app.last_gesture.get())
+        self.assertIn("Right click", self.app.last_gesture.get())
         self.assertIsNone(self.app.right_dwell_armed_at)
         self.assert_no_system_input()
 
@@ -338,7 +406,7 @@ class PreviewTests(unittest.TestCase):
         self.assert_no_system_input()
 
     def test_selecting_motion_only_tracks_closed_eyes_without_clicking(self):
-        self.app.click_mode.set(MOTION_MODE)
+        self.app.click_mode.set(self.app.text(MOTION_MODE))
         self.app.change_click_mode()
         self.assertTrue(self.app.settings.motion_only)
         closed = FaceSample(0.5, 0.5, 0.95, 0.95)
@@ -356,7 +424,7 @@ class PreviewTests(unittest.TestCase):
         self.mouse.click.assert_not_called()
 
         self.app.pause()
-        self.app.click_mode.set(WINK_MODE)
+        self.app.click_mode.set(self.app.text(WINK_MODE))
         self.app.change_click_mode()
         self.assertFalse(self.app.settings.motion_only)
         for time in (0.9, 1, 1.1, 1.21):
@@ -457,7 +525,7 @@ class PreviewTests(unittest.TestCase):
         self.assertFalse(self.app.active)
         self.assertFalse(self.app.can_enable)
         self.assertIs(self.app.camera, self.camera)
-        self.assertIn("Лицо долго не было видно", self.app.status.get())
+        self.assertIn("Face out of view too long", self.app.status.get())
         self.assert_no_system_input()
 
     def test_fresh_face_after_skipped_polls_does_not_renew_expired_input(self):

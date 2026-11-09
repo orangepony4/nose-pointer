@@ -7,7 +7,8 @@ from dataclasses import replace
 from time import monotonic
 from tkinter import ttk
 
-from camera import AMBIGUOUS_FACE, Camera, check_inference, download_model
+from camera import AMBIGUOUS_FACE, Camera, CameraError, check_inference, download_model
+from i18n import LANGUAGES, load_language, save_language, translate
 from tracking import Settings, Tracker
 
 
@@ -17,33 +18,22 @@ INK = "#23271f"
 MUTED = "#565c50"
 EDGE = "#dedbd1"
 ACCENT = "#315538"
-WINK_MODE = "Подмигивание"
-DWELL_MODE = "Задержка курсора"
-MOTION_MODE = "Только движение"
+WINK_MODE = "wink"
+DWELL_MODE = "dwell"
+MOTION_MODE = "motion"
+CLICK_MODES = (WINK_MODE, DWELL_MODE, MOTION_MODE)
 SENSITIVITY_PRESETS = {
-    "Низкая": (0.18, 0.15, Settings.dead_zone),
-    "Обычная": (Settings.range_x, Settings.range_y, Settings.dead_zone),
-    "Высокая": (0.065, 0.054, Settings.dead_zone),
+    "sensitivity_low": (0.18, 0.15, Settings.dead_zone),
+    "sensitivity_standard": (Settings.range_x, Settings.range_y, Settings.dead_zone),
+    "sensitivity_high": (0.065, 0.054, Settings.dead_zone),
 }
 DEFAULT_DWELL_MS = 1200
 DWELL_PRESETS_MS = (600, 800, 1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000)
 FACE_LOSS_GRACE_SECONDS = 5.0
 
-TRACKING_HINTS = {
-    "calibrating": "Смотрите прямо и держите оба глаза открытыми.",
-    "tracking": "Лицо в кадре. Двигайте носом небольшими движениями.",
-    "wink": "Подмигивание. Точка ждёт, пока глаз откроется.",
-    "rearming": "Держите оба глаза открытыми, чтобы продолжить.",
-    "paused": "Лицо потеряно или кадры задерживаются. Ввод приостановлен.",
-}
-MOTION_ONLY_HINTS = {
-    "calibrating": "Смотрите прямо и держите лицо в кадре.",
-    "rearming": "Держите лицо в кадре, чтобы продолжить.",
-}
-
-
-def dwell_label(milliseconds):
-    return f"{milliseconds / 1000:g}".replace(".", ",")
+def dwell_label(milliseconds, language):
+    value = f"{milliseconds / 1000:g}"
+    return value.replace(".", ",") if language == "ru" else value
 
 
 class PointerApp:
@@ -52,6 +42,10 @@ class PointerApp:
         self.mouse = mouse
         self.settings = settings
         self.args = args
+        self.language = getattr(args, "lang", "en")
+        self.static_labels = []
+        self.messages = {}
+        self.button_labels = {"camera_button": "open_camera", "pointer_button": "enable_mouse"}
         self.tracker = Tracker(settings)
         self.camera = None
         self.active = False
@@ -69,8 +63,8 @@ class PointerApp:
         root.title("Nose Pointer")
         root.configure(bg=BACKGROUND)
         extra_scale = max(0.0, root.winfo_fpixels("1i") / 96 - 1)
-        width = min(round(580 + 100 * extra_scale), root.winfo_screenwidth() - 32)
-        height = min(round(610 + 365 * extra_scale), root.winfo_screenheight() - 64)
+        width = min(round(580 + 160 * extra_scale), root.winfo_screenwidth() - 32)
+        height = min(round(626 + 405 * extra_scale), root.winfo_screenheight() - 64)
         root.geometry(f"{width}x{height}")
         root.minsize(width - 20, height - 25)
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -80,23 +74,32 @@ class PointerApp:
         style.configure("TButton", font=("Segoe UI", 10), padding=(10, 8))
         frame = tk.Frame(root, bg=BACKGROUND, padx=26, pady=22)
         frame.pack(fill="both", expand=True)
-        tk.Label(frame, text="Nose Pointer", font=("Segoe UI", 26, "bold"),
-                 bg=BACKGROUND, fg=INK, anchor="w").pack(fill="x")
-        tk.Label(frame, text="Управление указателем через веб-камеру", font=("Segoe UI", 11),
-                 bg=BACKGROUND, fg=MUTED, anchor="w", justify="left",
-                 wraplength=430).pack(fill="x", pady=(2, 17))
+        header = tk.Frame(frame, bg=BACKGROUND)
+        header.pack(fill="x")
+        tk.Label(header, text="Nose Pointer", font=("Segoe UI", 26, "bold"),
+                 bg=BACKGROUND, fg=INK, anchor="w").pack(side="left")
+        self.language_choice = tk.StringVar(value=LANGUAGES[self.language])
+        self.language_picker = ttk.Combobox(header, textvariable=self.language_choice,
+                                            values=tuple(LANGUAGES.values()), width=9, state="readonly")
+        self.language_picker.pack(side="right")
+        self.language_picker.bind("<<ComboboxSelected>>", self.change_language)
+        self.make_label(header, "language", font=("Segoe UI", 10), fg=INK).pack(side="right", padx=(0, 7))
+        self.make_label(frame, "subtitle", font=("Segoe UI", 11), fg=MUTED, anchor="w",
+                        justify="left", wraplength=430).pack(fill="x", pady=(2, 17))
 
-        self.mode = tk.StringVar(value="КАМЕРА ВЫКЛЮЧЕНА")
+        self.mode = tk.StringVar(value="")
+        self.set_message("mode", "mode_camera_off")
         tk.Label(frame, textvariable=self.mode, font=("Segoe UI", 11, "bold"),
                  bg=BACKGROUND, fg=ACCENT, anchor="w", justify="left", wraplength=430).pack(fill="x")
-        self.status = tk.StringVar(value="Откройте камеру, чтобы проверить управление в режиме пробы.")
+        self.status = tk.StringVar(value="")
+        self.set_message("status", "status_welcome")
         self.status_label = tk.Label(frame, textvariable=self.status, font=("Segoe UI", 10),
                                      bg=BACKGROUND, fg=INK, anchor="nw", justify="left",
                                      wraplength=430, height=3)
         self.status_label.pack(fill="x", pady=(4, 4))
         self.status_label.bind("<Configure>", lambda event: self.status_label.configure(wraplength=event.width))
 
-        self.pad = tk.Canvas(frame, bg=PAPER, width=400, height=110,
+        self.pad = tk.Canvas(frame, bg=PAPER, width=400, height=48,
                              highlightthickness=1, highlightbackground=EDGE)
         self.pad.pack(fill="both", expand=True)
         self.pad.bind("<Configure>", self.draw_pad)
@@ -111,40 +114,33 @@ class PointerApp:
         settings_controls.pack(fill="x", pady=(0, 12))
         sensitivity_row = tk.Frame(settings_controls, bg=BACKGROUND)
         sensitivity_row.pack(fill="x", pady=(0, 8))
-        tk.Label(sensitivity_row, text="Чувствительность", font=("Segoe UI", 10),
-                 bg=BACKGROUND, fg=INK).pack(side="left", padx=(0, 9))
+        self.make_label(sensitivity_row, "sensitivity", font=("Segoe UI", 10), fg=INK).pack(side="left", padx=(0, 9))
         self.sensitivity_presets = SENSITIVITY_PRESETS.copy()
         initial_range = (settings.range_x, settings.range_y, settings.dead_zone)
         selected_sensitivity = next((label for label, preset in self.sensitivity_presets.items()
-                                     if preset == initial_range), "Своя")
+                                     if preset == initial_range), "sensitivity_custom")
         self.sensitivity_presets[selected_sensitivity] = initial_range
-        self.sensitivity = tk.StringVar(value=selected_sensitivity)
+        self.sensitivity = tk.StringVar(value=self.text(selected_sensitivity))
         self.sensitivity_picker = ttk.Combobox(sensitivity_row, textvariable=self.sensitivity,
-                                               values=tuple(self.sensitivity_presets), width=12, state="readonly")
+                                               values=self.choice_labels(self.sensitivity_presets), width=12, state="readonly")
         self.sensitivity_picker.pack(side="left")
         self.sensitivity_picker.bind("<<ComboboxSelected>>", self.change_sensitivity)
 
         click_row = tk.Frame(settings_controls, bg=BACKGROUND)
         click_row.pack(fill="x")
-        tk.Label(click_row, text="Режим клика", font=("Segoe UI", 10),
-                 bg=BACKGROUND, fg=INK).pack(side="left", padx=(0, 9))
-        if settings.motion_only or args.no_clicks:
-            selected_mode = MOTION_MODE
-        else:
-            selected_mode = DWELL_MODE if settings.dwell_seconds is not None else WINK_MODE
-        self.click_mode = tk.StringVar(value=selected_mode)
+        self.make_label(click_row, "click_mode", font=("Segoe UI", 10), fg=INK).pack(side="left", padx=(0, 9))
+        self.click_mode = tk.StringVar(value=self.text(self.selected_click_mode()))
         self.mode_picker = ttk.Combobox(click_row, textvariable=self.click_mode,
-                                       values=(WINK_MODE, DWELL_MODE, MOTION_MODE), width=18,
+                                       values=self.choice_labels(CLICK_MODES), width=18,
                                        state="disabled" if args.no_clicks else "readonly")
         self.mode_picker.pack(side="left")
         self.mode_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
         current_delay = round(settings.dwell_seconds * 1000) if settings.dwell_seconds is not None else DEFAULT_DWELL_MS
-        self.dwell_durations = {dwell_label(delay): delay / 1000
-                                for delay in sorted({*DWELL_PRESETS_MS, current_delay})}
-        self.dwell_time = tk.StringVar(value=dwell_label(current_delay))
+        self.dwell_presets = tuple(sorted({*DWELL_PRESETS_MS, current_delay}))
+        self.dwell_durations = self.delay_choices()
+        self.dwell_time = tk.StringVar(value=dwell_label(current_delay, self.language))
         self.dwell_controls = tk.Frame(settings_controls, bg=BACKGROUND)
-        tk.Label(self.dwell_controls, text="Задержка, с", font=("Segoe UI", 10),
-                 bg=BACKGROUND, fg=INK).pack(side="left", padx=(0, 9))
+        self.make_label(self.dwell_controls, "dwell_delay", font=("Segoe UI", 10), fg=INK).pack(side="left", padx=(0, 9))
         self.delay_picker = ttk.Combobox(self.dwell_controls, textvariable=self.dwell_time,
                                         values=tuple(self.dwell_durations), width=6, state="readonly")
         self.delay_picker.pack(side="left")
@@ -154,23 +150,85 @@ class PointerApp:
 
         controls = tk.Frame(frame, bg=BACKGROUND)
         controls.pack(fill="x")
-        self.camera_button = ttk.Button(controls, text="Открыть камеру", command=self.toggle_camera)
+        self.camera_button = ttk.Button(controls, text=self.text("open_camera"), command=self.toggle_camera)
         self.camera_button.pack(side="left", padx=(0, 8))
-        self.pointer_button = ttk.Button(controls, text="Включить мышь", command=self.toggle_pointer, state="disabled")
+        self.pointer_button = ttk.Button(controls, text=self.text("enable_mouse"), command=self.toggle_pointer, state="disabled")
         self.pointer_button.pack(side="left")
         self.right_dwell_button = ttk.Button(self.dwell_controls, command=self.toggle_right_dwell)
         self.right_dwell_button.bind("<ButtonRelease-3>", self.cancel_right_dwell)
         self.show_click_instructions()
-        tk.Label(frame, text="F8  ·  Пауза     F9  ·  Калибровка", font=("Segoe UI", 10, "bold"),
-                 bg=BACKGROUND, fg=INK, anchor="w", justify="left",
-                 wraplength=430).pack(fill="x", pady=(9, 0))
-        privacy = "Кадры обрабатываются на этом компьютере"
-        if args.no_clicks:
-            privacy = "Клики отключены  ·  " + privacy
-        tk.Label(frame, text=privacy, font=("Segoe UI", 9), bg=BACKGROUND,
-                 fg=MUTED, anchor="w", justify="left", wraplength=430).pack(fill="x", pady=(4, 0))
+        self.make_label(frame, "hotkeys", font=("Segoe UI", 10, "bold"), fg=INK,
+                        anchor="w", justify="left", wraplength=430).pack(fill="x", pady=(9, 0))
+        privacy_key = "privacy_no_clicks" if args.no_clicks else "privacy"
+        self.make_label(frame, privacy_key, font=("Segoe UI", 9), fg=MUTED, anchor="w",
+                        justify="left", wraplength=430).pack(fill="x", pady=(4, 0))
         self.camera_button.focus_set()
         root.after(16, self.poll)
+
+    def text(self, key, **fields):
+        return translate(self.language, key, **fields)
+
+    def make_label(self, parent, key, **options):
+        label = tk.Label(parent, text=self.text(key), bg=BACKGROUND, **options)
+        self.static_labels.append((label, key))
+        return label
+
+    def set_message(self, target, *keys, **fields):
+        self.messages[target] = (keys, fields)
+        self.render_message(target)
+
+    def render_message(self, target):
+        keys, fields = self.messages[target]
+        value = "\n".join(self.text(key, **fields) for key in keys)
+        variable = getattr(self, target)
+        if variable.get() != value:
+            variable.set(value)
+
+    def set_button(self, target, key, **options):
+        self.button_labels[target] = key
+        getattr(self, target).configure(text=self.text(key), **options)
+
+    def choice_labels(self, keys):
+        return tuple(self.text(key) for key in keys)
+
+    def choice_key(self, variable, keys):
+        return next((key for key in keys if self.text(key) == variable.get()), None)
+
+    def selected_click_mode(self):
+        if self.settings.motion_only or self.args.no_clicks:
+            return MOTION_MODE
+        return DWELL_MODE if self.settings.dwell_seconds is not None else WINK_MODE
+
+    def delay_choices(self):
+        return {dwell_label(delay, self.language): delay for delay in self.dwell_presets}
+
+    def change_language(self, _event=None):
+        language = next((key for key, label in LANGUAGES.items() if label == self.language_choice.get()), None)
+        if self.active or language is None:
+            self.language_choice.set(LANGUAGES[self.language])
+            return
+        if language == self.language:
+            return
+
+        delay = self.dwell_durations[self.dwell_time.get()]
+        sensitivity = (self.settings.range_x, self.settings.range_y, self.settings.dead_zone)
+        preset = next(key for key, value in self.sensitivity_presets.items() if value == sensitivity)
+        self.language = language
+        self.dwell_durations = self.delay_choices()
+        self.dwell_time.set(dwell_label(delay, self.language))
+        self.delay_picker.configure(values=tuple(self.dwell_durations))
+        self.sensitivity.set(self.text(preset))
+        self.sensitivity_picker.configure(values=self.choice_labels(self.sensitivity_presets))
+        self.click_mode.set(self.text(self.selected_click_mode()))
+        self.mode_picker.configure(values=self.choice_labels(CLICK_MODES))
+        for label, key in self.static_labels:
+            label.configure(text=self.text(key))
+        for target, key in self.button_labels.items():
+            getattr(self, target).configure(text=self.text(key))
+        for target in self.messages:
+            self.render_message(target)
+        self.refresh_right_dwell_button()
+        save_language(language)
 
     def show_click_instructions(self):
         self.dwell_bar.configure(value=0)
@@ -178,31 +236,29 @@ class PointerApp:
             self.dwell_controls.pack(fill="x", pady=(8, 0))
             if not self.args.no_clicks:
                 self.right_dwell_button.pack(side="right")
-            self.last_gesture.set("Переместите точку, затем задержитесь для левого клика.")
+            self.set_message("last_gesture", "instruction_dwell")
         else:
             self.dwell_controls.pack_forget()
             self.right_dwell_button.pack_forget()
-            instruction = ("Двигайте точку носом. Клики отключены."
-                           if self.settings.motion_only or self.args.no_clicks
-                           else "Подмигните одним глазом и откройте его.")
-            self.last_gesture.set(instruction)
+            instruction = "instruction_motion" if self.settings.motion_only or self.args.no_clicks else "instruction_wink"
+            self.set_message("last_gesture", instruction)
         self.refresh_right_dwell_button()
 
     def refresh_right_dwell_button(self):
         armed = self.right_dwell_armed_at is not None
         available = self.settings.dwell_seconds is not None and not self.args.no_clicks
         self.right_dwell_button.configure(
-            text="Отменить" if armed else "Правый клик",
+            text=self.text("cancel" if armed else "right_click"),
             state="normal" if available and (self.can_enable or armed) else "disabled",
         )
 
-    def clear_right_dwell(self, message="Правый клик отменён."):
+    def clear_right_dwell(self, message="right_cancelled"):
         if self.right_dwell_armed_at is None:
             return
         self.right_dwell_armed_at = None
         self.refresh_right_dwell_button()
         if message is not None:
-            self.last_gesture.set(message)
+            self.set_message("last_gesture", message)
 
     def toggle_right_dwell(self):
         if self.right_dwell_armed_at is not None:
@@ -212,7 +268,7 @@ class PointerApp:
             return
         self.right_dwell_armed_at = monotonic()
         self.refresh_right_dwell_button()
-        self.last_gesture.set("Следующий клик — правый. Переместите указатель к цели.")
+        self.set_message("last_gesture", "right_armed")
         self.tracker.reset_dwell()
         self.dwell_bar.configure(value=0)
 
@@ -221,21 +277,26 @@ class PointerApp:
         self.clear_right_dwell(message=None)
         self.tracker.reset_dwell()
         self.dwell_bar.configure(value=0)
-        self.last_gesture.set("Правый клик отменён.")
+        self.set_message("last_gesture", "right_cancelled")
         return "break"
 
     def change_click_mode(self, _event=None):
         if self.active or self.args.no_clicks:
             return
-        mode = self.click_mode.get()
+        mode = self.choice_key(self.click_mode, CLICK_MODES)
+        if mode is None:
+            return
         motion_only = mode == MOTION_MODE
-        dwell_seconds = self.dwell_durations[self.dwell_time.get()] if mode == DWELL_MODE else None
+        dwell_seconds = self.dwell_durations[self.dwell_time.get()] / 1000 if mode == DWELL_MODE else None
         self.apply_tracking_settings(replace(self.settings, dwell_seconds=dwell_seconds, motion_only=motion_only))
 
     def change_sensitivity(self, _event=None):
         if self.active:
             return
-        range_x, range_y, dead_zone = self.sensitivity_presets[self.sensitivity.get()]
+        preset = self.choice_key(self.sensitivity, self.sensitivity_presets)
+        if preset is None:
+            return
+        range_x, range_y, dead_zone = self.sensitivity_presets[preset]
         self.apply_tracking_settings(replace(self.settings, range_x=range_x, range_y=range_y, dead_zone=dead_zone))
 
     def apply_tracking_settings(self, settings):
@@ -260,7 +321,7 @@ class PointerApp:
 
     def toggle_camera(self):
         if self.camera and self.camera.thread.is_alive():
-            self.stop_camera("Камера выключается…")
+            self.stop_camera("status_stopping")
             return
         self.disable_input()
         self.last_frame = None
@@ -269,18 +330,18 @@ class PointerApp:
         self.position = (0.5, 0.5)
         self.draw_pad()
         self.show_click_instructions()
-        self.mode.set("ПРОБА  ·  СИСТЕМНАЯ МЫШЬ ВЫКЛЮЧЕНА")
-        self.status.set("Открываем камеру…")
-        self.camera_button.configure(text="Выключить камеру")
+        self.set_message("mode", "mode_preview")
+        self.set_message("status", "status_opening")
+        self.set_button("camera_button", "stop_camera")
         self.camera = Camera(self.args.camera)
         self.camera.start()
 
-    def stop_camera(self, message):
+    def stop_camera(self, message, **fields):
         self.camera.stop()
         self.disable_input()
-        self.camera_button.configure(text="Открыть камеру", state="disabled")
-        self.mode.set("СИСТЕМНАЯ МЫШЬ ВЫКЛЮЧЕНА")
-        self.status.set(message)
+        self.set_button("camera_button", "open_camera", state="disabled")
+        self.set_message("mode", "mode_input_off")
+        self.set_message("status", message, **fields)
 
     def toggle_pointer(self):
         if self.active:
@@ -292,17 +353,17 @@ class PointerApp:
         self.recenter_held = self.mouse.recenter_requested()
         self.last_active_face_at = monotonic()
         self.active = True
+        self.language_picker.configure(state="disabled")
         self.sensitivity_picker.configure(state="disabled")
         self.mode_picker.configure(state="disabled")
         self.delay_picker.configure(state="disabled")
-        self.mode.set("СИСТЕМНАЯ МЫШЬ ВКЛЮЧЕНА")
-        self.pointer_button.configure(text="Пауза")
+        self.set_message("mode", "mode_active")
+        self.set_button("pointer_button", "pause")
         self.recenter()
 
     def recenter(self):
         self.reset_calibration()
-        self.status.set("Калибровка на месте. Смотрите прямо." if self.settings.motion_only
-                        else "Калибровка на месте. Смотрите прямо и откройте оба глаза.")
+        self.set_message("status", "status_recenter_motion" if self.settings.motion_only else "status_recenter")
 
     def reset_calibration(self):
         self.tracker.reset()
@@ -315,7 +376,7 @@ class PointerApp:
 
     def pause(self, _event=None):
         if self.active:
-            self.reset_to_preview("Пауза. Чтобы снова управлять мышью, включите её кнопкой.")
+            self.reset_to_preview("status_paused")
         elif self.right_dwell_armed_at is not None:
             self.toggle_right_dwell()
 
@@ -323,15 +384,16 @@ class PointerApp:
         self.active = False
         self.last_active_face_at = None
         self.reset_calibration()
+        self.language_picker.configure(state="readonly")
         self.sensitivity_picker.configure(state="readonly")
         self.mode_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
         self.delay_picker.configure(state="readonly")
-        self.pointer_button.configure(text="Включить мышь", state="disabled")
+        self.set_button("pointer_button", "enable_mouse", state="disabled")
 
     def reset_to_preview(self, message):
         self.disable_input()
-        self.mode.set("ПРОБА  ·  СИСТЕМНАЯ МЫШЬ ВЫКЛЮЧЕНА")
-        self.status.set(message)
+        self.set_message("mode", "mode_preview")
+        self.set_message("status", message)
 
     def pause_for_safety(self, message):
         self.safety_notice = message
@@ -345,7 +407,7 @@ class PointerApp:
             # Frames already captured when the button was pressed cannot arm the next click.
             self.tracker.reset_dwell()
         if result.state == "face_jump":
-            self.pause_for_safety("Лицо резко сместилось. Управление выключено.")
+            self.pause_for_safety("safety_jump")
             return
         if result.state == "paused":
             self.clear_right_dwell()
@@ -367,13 +429,12 @@ class PointerApp:
             self.refresh_right_dwell_button()
         if not self.active:
             self.pointer_button.configure(state="normal" if self.can_enable else "disabled")
-        hint = TRACKING_HINTS[result.state]
-        if self.settings.motion_only:
-            hint = MOTION_ONLY_HINTS.get(result.state, hint)
-        if self.safety_notice:
-            hint = f"{self.safety_notice}\n{hint}"
-        if self.status.get() != hint:
-            self.status.set(hint)
+        hint = f"hint_{result.state}"
+        if self.settings.motion_only and result.state in ("calibrating", "rearming"):
+            hint += "_motion"
+        keys = (self.safety_notice, hint) if self.safety_notice else (hint,)
+        if self.messages.get("status") != (keys, {}):
+            self.set_message("status", *keys)
         if self.settings.dwell_seconds is not None:
             self.dwell_bar.configure(value=result.dwell_progress * 100)
         if result.position is not None:
@@ -391,9 +452,8 @@ class PointerApp:
                 button = "right" if button == "left" else "left"
             if self.active:
                 self.mouse.click(button)
-            label = "Левый" if button == "left" else "Правый"
-            mode = "Системная мышь" if self.active else "Проба"
-            self.last_gesture.set(f"{mode}  ·  {label} клик")
+            mode = "active" if self.active else "preview"
+            self.set_message("last_gesture", f"gesture_{mode}_{button}")
 
     def poll(self):
         if self.active:
@@ -409,23 +469,23 @@ class PointerApp:
             now = monotonic()
             if (self.active and self.last_active_face_at is not None
                     and now >= self.last_active_face_at + FACE_LOSS_GRACE_SECONDS):
-                self.pause_for_safety("Лицо долго не было видно. Управление выключено.")
+                self.pause_for_safety("safety_loss")
             if error is not None and not self.camera.stop_event.is_set():
-                self.stop_camera(error or "Камера завершила работу с ошибкой.")
+                self.stop_camera(error.key, detail=error.detail)
             if not self.camera.thread.is_alive():
                 self.disable_input()
                 self.camera = None
-                self.camera_button.configure(state="normal", text="Открыть камеру")
-                self.mode.set("КАМЕРА ВЫКЛЮЧЕНА")
+                self.set_button("camera_button", "open_camera", state="normal")
+                self.set_message("mode", "mode_camera_off")
                 if error is None:
-                    self.status.set("Камера выключена. Её можно открыть снова.")
+                    self.set_message("status", "status_camera_off")
             elif latest and not self.camera.stop_event.is_set():
                 captured_at, sample = latest
                 try:
                     if sample is AMBIGUOUS_FACE:
                         if self.last_frame != captured_at:
                             self.last_frame = captured_at
-                            self.pause_for_safety("В кадре несколько лиц. Управление выключено.")
+                            self.pause_for_safety("safety_multiple")
                     elif now - captured_at > self.settings.max_sample_gap_seconds:
                         if not self.feed_stale:
                             self.feed_stale = True
@@ -441,7 +501,7 @@ class PointerApp:
                         self.update_tracking(captured_at, sample)
                 except OSError as error:
                     self.pause()
-                    self.last_gesture.set(f"Ввод остановлен: {error}")
+                    self.set_message("last_gesture", "input_stopped", detail=str(error))
         self.root.after(16, self.poll)
 
     def close(self):
@@ -451,36 +511,48 @@ class PointerApp:
         self.root.destroy()
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(argv=None):
+    language_option = argparse.ArgumentParser(add_help=False)
+    language_option.add_argument("--lang", choices=LANGUAGES)
+    language = language_option.parse_known_args(argv)[0].lang or "en"
+
+    def text(key):
+        return translate(language, key)
+
+    parser = argparse.ArgumentParser(description=text("cli_description"), add_help=False)
+    parser.add_argument("-h", "--help", action="help", help=text("cli_help"))
+    parser.add_argument("--lang", choices=LANGUAGES, help=text("cli_lang"))
     commands = parser.add_mutually_exclusive_group()
-    commands.add_argument("--download-model", action="store_true", help="fetch and verify the local model")
-    commands.add_argument("--check", action="store_true", help="run the model on a blank frame without opening a camera")
-    parser.add_argument("--camera", type=int, default=0, help="webcam index, normally 0")
-    parser.add_argument("--range-x", type=float, default=0.12, help="horizontal nose displacement from center to screen edge")
-    parser.add_argument("--range-y", type=float, default=0.10, help="vertical nose displacement from center to screen edge")
-    parser.add_argument("--wink-ms", type=int, default=220, help="minimum intentional wink duration in milliseconds")
-    parser.add_argument("--no-mirror", action="store_true", help="reverse horizontal direction")
-    parser.add_argument("--swap-buttons", action="store_true", help="exchange left and right wink actions")
+    commands.add_argument("--download-model", action="store_true", help=text("cli_download"))
+    commands.add_argument("--check", action="store_true", help=text("cli_check"))
+    parser.add_argument("--camera", type=int, default=0, help=text("cli_camera"))
+    parser.add_argument("--range-x", type=float, default=0.12, help=text("cli_range_x"))
+    parser.add_argument("--range-y", type=float, default=0.10, help=text("cli_range_y"))
+    parser.add_argument("--wink-ms", type=int, default=220, help=text("cli_wink"))
+    parser.add_argument("--no-mirror", action="store_true", help=text("cli_no_mirror"))
+    parser.add_argument("--swap-buttons", action="store_true", help=text("cli_swap"))
     clicks = parser.add_mutually_exclusive_group()
-    clicks.add_argument("--no-clicks", action="store_true", help="enable pointer motion only")
-    clicks.add_argument("--dwell-ms", type=int, help="start in dwell-click mode with a 600–5000 ms delay")
-    args = parser.parse_args()
+    clicks.add_argument("--no-clicks", action="store_true", help=text("cli_no_clicks"))
+    clicks.add_argument("--dwell-ms", type=int, help=text("cli_dwell"))
+    args = parser.parse_args(argv)
+    if args.lang is None and not (args.download_model or args.check):
+        args.lang = load_language()
+    language = args.lang or "en"
     if args.dwell_ms is not None and not 600 <= args.dwell_ms <= 5000:
-        parser.error("Задержка клика должна быть от 600 до 5000 мс.")
+        parser.error(text("cli_dwell_invalid"))
     try:
         if args.download_model:
             download_model()
-            print("Модель готова.")
+            print(text("model_ready"))
             return
         if args.check:
             check_inference()
-            print("Модель и обработка кадров работают. Камера оставалась выключенной.")
+            print(text("model_check_ok"))
             return
         if sys.platform != "win32":
-            parser.error("Системный ввод поддерживается в Windows.")
+            parser.error(text("cli_platform"))
         if args.camera < 0:
-            parser.error("Индекс камеры не может быть отрицательным.")
+            parser.error(text("cli_camera_invalid"))
 
         from windows_mouse import WindowsMouse, enable_dpi_awareness
 
@@ -493,6 +565,8 @@ def main():
         root = tk.Tk()
         PointerApp(root, mouse, settings, args)
         root.mainloop()
+    except CameraError as error:
+        parser.exit(1, f"Nose Pointer: {text(error.key)}\n")
     except (ImportError, OSError, RuntimeError, ValueError, tk.TclError) as error:
         parser.exit(1, f"Nose Pointer: {error}\n")
 

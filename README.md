@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.6.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.6.0.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.6.0)
+**[Download the Windows ZIP (v0.7.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.7.0.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.7.0)
 
 ## English
 
@@ -22,24 +22,24 @@ uv run --locked nose_pointer.py
 
 ### Start in practice mode
 
-The current app uses Russian labels. The steps below include the captions shown in the window.
+Nose Pointer opens in English on first launch. Use **Language** to switch to **Русский** before enabling system control or while in practice mode. Switching keeps your practice position and settings. The app saves the language preference in `%LOCALAPPDATA%\NosePointer\language.txt`.
 
-1. Select **Открыть камеру** (Open camera). The green dot is a practice pointer. Your Windows cursor stays under your usual control.
+1. Select **Open camera** (Открыть камеру). The green dot is a practice pointer. Your Windows cursor stays under your usual control.
 2. Look straight ahead while the app calibrates. Keep both eyes open in the click modes. Try moving the dot, then hold a wink for about a quarter of a second and open the eye. The app shows the recognized click below the practice area.
-3. Choose your click mode and sensitivity while still in practice mode. Select **Включить мышь** (Enable mouse) when ready. Calibration uses the current cursor position as its starting point, and the pointer can reach across multiple monitors.
-4. Press **F8** from any window to pause. You can also press **Esc** in Nose Pointer, select **Пауза** (Pause), or close the app. **Выключить камеру** (Turn off camera) stops capture.
+3. Choose your click mode and sensitivity while still in practice mode. Select **Enable mouse** (Включить мышь) when ready. Calibration uses the current cursor position as its starting point, and the pointer can reach across multiple monitors.
+4. Press **F8** from any window to pause. You can also press **Esc** in Nose Pointer, select **Pause** (Пауза), or close the app. **Turn off camera** (Выключить камеру) stops capture.
 
 ### Choose how to click
 
-Use **Режим клика** (Click mode) in practice mode.
+Use **Click mode** (Режим клика) in practice mode.
 
-- **Подмигивание** (Wink). Wink with the left or right eye and reopen it to send the corresponding click. The pointer holds still during the wink. Blinking both eyes and closing one eye for too short or too long a time produce no click.
-- **Задержка курсора** (Dwell). Move to a target and hold the pointer there. The progress bar tracks the delay, which defaults to 1.2 seconds and can be set from 0.6 to 5 seconds. Move away before the next click. For one right click, select **Правый клик** (Right click), then move to the target and dwell. You can select that button with a regular dwell click when system control is enabled. The next dwell returns to left-click behavior. Select **Отменить** (Cancel) to clear the choice.
-- **Только движение** (Motion only). Use nose movement for the pointer and another device for clicks. Eye closure does not affect calibration or movement in this mode.
+- **Wink** (Подмигивание). Wink with the left or right eye and reopen it to send the corresponding click. The pointer holds still during the wink. Blinking both eyes and closing one eye for too short or too long a time produce no click.
+- **Dwell** (Задержка курсора). Move to a target and hold the pointer there. The progress bar tracks the delay, which defaults to 1.2 seconds and can be set from 0.6 to 5 seconds. Move away before the next click. For one right click, select **Right click** (Правый клик), then move to the target and dwell. You can select that button with a regular dwell click when system control is enabled. The next dwell returns to left-click behavior. Select **Cancel** (Отменить) to clear the choice.
+- **Motion only** (Только движение). Use nose movement for the pointer and another device for clicks. This mode uses face position for calibration and steering.
 
 ### Recalibrate and recover
 
-Press **F9** with system control enabled to recalibrate from the current cursor position. In practice mode, use **Чувствительность** (Sensitivity) to tune the amount of head movement. **Высокая** (High) needs less movement, and **Низкая** (Low) gives finer control. Changing sensitivity starts a fresh calibration.
+Press **F9** with system control enabled to recalibrate from the current cursor position. In practice mode, use **Sensitivity** (Чувствительность) to tune the amount of head movement. **High** (Высокая) needs less movement, and **Low** (Низкая) gives finer control. Changing sensitivity starts a fresh calibration.
 
 A short loss of tracking pauses input. Keep your face in view and, in the click modes, open both eyes to resume. If another device moved the cursor during the pause, the app recalibrates at that location. After five seconds without an accepted face frame, Nose Pointer returns to practice mode and requires explicit re-enabling. The app also disables system input when it detects multiple faces or an abrupt face jump. Keep one person in view. Tracking loss or a pause clears dwell progress and any pending right click.
 
@@ -50,10 +50,11 @@ uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-
 ```
 
 - `--camera 1` selects another webcam. The default index is `0`.
-- `--range-x` and `--range-y` set the fraction of the frame you move from the neutral pose to reach a screen edge. Smaller values increase sensitivity. A custom pair appears as **Своя** (Custom) in the sensitivity menu.
+- `--range-x` and `--range-y` set the fraction of the frame you move from the neutral pose to reach a screen edge. Smaller values increase sensitivity. A custom pair appears as **Custom** (Своя) in the sensitivity menu.
 - `--wink-ms` sets the minimum wink duration. The default is 220 ms.
 - `--dwell-ms 1600` starts in dwell mode. The supported range is 600–5000 ms.
 - `--no-mirror` reverses the horizontal mapping. `--swap-buttons` swaps the left and right wink actions. `--no-clicks` starts and locks the app in motion-only mode.
+- `--lang ru` or `--lang en` overrides the saved language for that launch.
 
 ### Privacy and testing
 
@@ -74,7 +75,7 @@ The tests use synthetic face samples and mocked system input. The model check pr
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.6.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.6.0.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.6.0)
+**[Скачать ZIP для Windows (v0.7.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.7.0.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.7.0)
 
 ### Запуск на Windows
 
@@ -89,6 +90,8 @@ uv run --locked nose_pointer.py
 ```
 
 ### Первое использование
+
+При первом запуске интерфейс открывается на английском. Выберите **Language → Русский** до включения системной мыши или в режиме пробы. Настройки и положение тестового указателя сохранятся. Язык запоминается в файле `%LOCALAPPDATA%\NosePointer\language.txt`.
 
 1. Нажмите **Открыть камеру**. В режиме пробы зелёная точка движется в окне, а курсор Windows остаётся под вашим обычным управлением.
 2. Смотрите прямо во время калибровки. В режимах клика держите оба глаза открытыми. Попробуйте подвигать точку, затем подмигните одним глазом примерно на четверть секунды и откройте его. Под тестовым полем появится сторона распознанного клика.
@@ -120,6 +123,7 @@ uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-
 - `--wink-ms` задаёт минимальную длительность подмигивания. По умолчанию это 220 мс.
 - `--dwell-ms 1600` открывает режим задержки и задаёт время ожидания от 600 до 5000 мс.
 - `--no-mirror` меняет горизонтальное направление. `--swap-buttons` меняет местами левый и правый клики подмигиванием. `--no-clicks` запускает приложение в режиме **Только движение** и блокирует выбор других режимов.
+- `--lang ru` или `--lang en` переопределяет сохранённый язык для этого запуска.
 
 ### Приватность и проверки
 
