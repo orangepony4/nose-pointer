@@ -232,11 +232,11 @@ class PreviewTests(unittest.TestCase):
         self.feed(0.92, LEFT_WINK)
         self.mouse.recenter_requested.return_value = True
         self.mouse.position.return_value = (0.25, 0.8)
-        for now in (1.08, 1.18, 1.28, 1.4):
-            self.feed(now)
+        for now, y in [(1.08, 0.50), (1.18, 0.52), (1.28, 0.57), (1.4, 0.60)]:
+            self.feed(now, replace(OPEN_FACE, nose_y=y))
         self.assert_no_system_input()
         self.assertTrue(self.app.tracker.calibrated)
-        self.feed(1.5)
+        self.feed(1.5, replace(OPEN_FACE, nose_y=0.60))
         self.mouse.move.assert_called_once_with(0.25, 0.8)
         self.mouse.click.assert_not_called()
 

@@ -231,13 +231,17 @@ class Tracker:
             progress = (now - self._calibration_start) / duration
             return TrackingOutput(None, None, "calibrating", progress)
 
-        self._neutral = (
-            self._calibration_x / self._calibration_count,
-            self._calibration_y / self._calibration_count,
-        )
+        neutral_x = self._calibration_x / self._calibration_count
+        neutral_y = self._calibration_y / self._calibration_count
         if calibration_position is not None:
+            # Keep the pointer at its anchor if the user's final pose drifted.
+            if abs(sample.nose_x - neutral_x) > self.settings.dead_zone:
+                neutral_x = sample.nose_x
+            if abs(sample.nose_y - neutral_y) > self.settings.dead_zone:
+                neutral_y = sample.nose_y
             self._origin = calibration_position
             self._position = calibration_position
+        self._neutral = (neutral_x, neutral_y)
         if self.settings.dwell_seconds is not None:
             # Smoothing or a late calibration shift must not look like new intent.
             self._dwell_origin = self._target(sample)

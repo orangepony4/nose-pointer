@@ -33,6 +33,33 @@ class AnchorTests(unittest.TestCase):
         tracker.update(0.0, face(), calibration_position=(0.1, 0.9))
         self.assertEqual(tracker.update(0.11, face()).position, (0.5, 0.5))
 
+    def test_anchored_calibration_accounts_for_drift_on_each_axis(self):
+        tracker = Tracker(Settings(calibration_seconds=0.3, dwell_seconds=0.3))
+        anchor = (0.8, 0.25)
+        for now, x, y in [(0, 0.50, 0.488), (0.1, 0.52, 0.490),
+                          (0.2, 0.57, 0.492), (0.31, 0.60, 0.500)]:
+            result = tracker.update(now, face(x, y), calibration_position=anchor)
+        self.assertEqual(result.position, anchor)
+
+        # X drifted during calibration. Y stayed close enough to keep its average.
+        for now in (0.35, 0.49, 0.63, 0.77):
+            result = tracker.update(now, face(0.60, 0.487))
+            self.assertEqual(result.position, anchor)
+            self.assertEqual(result.dwell_progress, 0)
+            self.assertIsNone(result.click)
+
+        moved = tracker.update(0.81, face(0.62, 0.487))
+        self.assertLess(moved.position[0], anchor[0])
+        self.assertEqual(moved.position[1], anchor[1])
+        self.assertIsNone(moved.click)
+
+    def test_unanchored_preview_keeps_the_calibration_average_after_drift(self):
+        tracker = Tracker(Settings(calibration_seconds=0.3, smoothing_seconds=0))
+        for now, y in [(0, 0.50), (0.1, 0.52), (0.2, 0.57), (0.31, 0.60)]:
+            tracker.update(now, face(y=y))
+        self.assertEqual(tracker.update(0.35, face(y=0.5475)).position, (0.5, 0.5))
+        self.assertGreater(tracker.update(0.39, face(y=0.60)).position[1], 0.5)
+
     def test_mirrored_mapping_reaches_all_edges_from_an_offset_origin(self):
         tracker = Tracker(Settings(calibration_seconds=0, smoothing_seconds=0))
         origin = (0.78, 0.23)
