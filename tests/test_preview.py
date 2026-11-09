@@ -33,6 +33,7 @@ class PreviewTests(unittest.TestCase):
         self.mouse = Mock()
         self.mouse.emergency_requested.return_value = False
         self.mouse.recenter_requested.return_value = False
+        self.mouse.button_held.return_value = False
         self.mouse.position.return_value = (0.5, 0.5)
 
         def move_cursor(x, y):
@@ -435,6 +436,22 @@ class PreviewTests(unittest.TestCase):
         self.app.camera_picker.selection_range.assert_called_with(0, "end")
         self.assert_no_system_input()
 
+    def test_explicit_camera_stop_finishes_even_if_the_driver_reports_a_late_error(self):
+        self.arm_system_pointer()
+        self.app.toggle_camera()
+        self.assertEqual(self.app.status.get(), self.app.text("status_stopping"))
+        self.camera.stop_event.is_set.return_value = True
+        self.camera.thread.is_alive.return_value = False
+        self.camera.snapshot.return_value = (None, camera.CameraFailure("camera_error_detail", "late read error"))
+        self.app.poll()
+
+        self.assertIsNone(self.app.camera)
+        self.assertFalse(self.app.active)
+        self.assertEqual(self.app.mode.get(), self.app.text("mode_camera_off"))
+        self.assertEqual(self.app.status.get(), self.app.text("status_camera_off"))
+        self.app.camera_picker.configure.assert_called_with(state="normal")
+        self.assert_no_system_input()
+
     def test_camera_start_error_reenables_the_number_picker(self):
         self.camera.snapshot.return_value = (None, None)
         self.camera.thread.is_alive.return_value = False
@@ -594,6 +611,42 @@ class PreviewTests(unittest.TestCase):
         self.assertIsNone(self.app.right_dwell_armed_at)
         self.assertEqual(self.app.safety_notice, "safety_pointer_moved")
         self.app.dwell_bar.configure.assert_called_with(value=0)
+
+    def test_dwell_click_checks_for_a_held_mouse_button_before_and_after_moving(self):
+        for button_held_at_start in (True, False):
+            with self.subTest(button_held_at_start=button_held_at_start):
+                self.app.disable_input()
+                self.select_quick_dwell()
+                self.arm_system_pointer()
+                self.app.toggle_right_dwell()
+                self.feed(0.8)
+                for now in (0.9, 1.08, 1.26, 1.44):
+                    self.feed(now, MOVED_FACE)
+                self.mouse.button_held.assert_not_called()
+                self.mouse.reset_mock()
+                self.mouse.button_held.side_effect = [True] if button_held_at_start else [False, True]
+                self.feed(1.52, MOVED_FACE)
+
+                self.assertEqual(self.mouse.button_held.call_count, 1 if button_held_at_start else 2)
+                self.assertEqual(self.mouse.move.call_count, 0 if button_held_at_start else 1)
+                self.mouse.click.assert_not_called()
+                self.assertFalse(self.app.active)
+                self.assertIsNone(self.app.right_dwell_armed_at)
+                self.assertEqual(self.app.safety_notice, "safety_mouse_button")
+                self.mouse.button_held.side_effect = None
+
+    def test_wink_click_does_not_send_mouse_events_while_an_external_button_is_held(self):
+        self.arm_system_pointer()
+        for now in (0.80, 0.92, 1.03):
+            self.feed(now, LEFT_WINK)
+        self.mouse.button_held.return_value = True
+        self.feed(1.08)
+
+        self.mouse.button_held.assert_called_once_with()
+        self.mouse.position.assert_not_called()
+        self.assert_no_system_input()
+        self.assertFalse(self.app.active)
+        self.assertEqual(self.app.safety_notice, "safety_mouse_button")
 
     def test_wink_click_is_cancelled_after_another_device_moves_the_pointer(self):
         self.arm_system_pointer()

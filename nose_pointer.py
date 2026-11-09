@@ -587,7 +587,10 @@ class PointerApp:
         self.reset_to_preview(message)
         self.set_footer_notice(f"{message}_brief")
 
-    def cancel_click_if_pointer_moved(self):
+    def cancel_unsafe_click(self):
+        if self.mouse.button_held():
+            self.pause_for_safety("safety_mouse_button")
+            return True
         if self.mouse.position() == self.last_applied_position:
             return False
         self.pause_for_safety("safety_pointer_moved")
@@ -638,8 +641,8 @@ class PointerApp:
         click = None if self.args.no_clicks or self.settings.motion_only else result.click
         system_click = self.active and click is not None
         if result.position is not None:
-            # Check before a dwell frame can overwrite movement from another device.
-            if system_click and self.cancel_click_if_pointer_moved():
+            # Check before a dwell frame can interfere with manual input.
+            if system_click and self.cancel_unsafe_click():
                 return
             if self.position != result.position:
                 self.position = result.position
@@ -647,7 +650,7 @@ class PointerApp:
             if self.active:
                 self.last_applied_position = anchor if calibrating else self.mouse.move(*result.position)
         if click is not None:
-            if system_click and self.cancel_click_if_pointer_moved():
+            if system_click and self.cancel_unsafe_click():
                 return
             button = click
             if self.settings.dwell_seconds is not None and self.right_dwell_armed_at is not None:
@@ -677,8 +680,9 @@ class PointerApp:
             if error is not None and not self.camera.stop_event.is_set():
                 self.stop_camera(error.key, detail=error.detail)
             if not self.camera.thread.is_alive():
+                stopped_by_user = self.messages["status"][0] == ("status_stopping",)
                 self.finish_camera()
-                if error is None:
+                if error is None or stopped_by_user:
                     self.status_label.configure(height=3)
                     self.set_message("status", "status_camera_off")
                     self.set_footer_notice()

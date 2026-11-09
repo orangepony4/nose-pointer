@@ -79,6 +79,15 @@ class WindowsMouseTests(unittest.TestCase):
         )
         self.assertEqual(self.mouse._key_state.call_args_list, [call(0x78)] * 4)
 
+    def test_button_held_checks_the_high_bit_of_each_standard_physical_button(self):
+        self.mouse._key_state.return_value = 1
+        self.assertFalse(self.mouse.button_held())
+        self.assertEqual(self.mouse._key_state.call_args_list, [call(0x01), call(0x02), call(0x04)])
+        for button in (0x01, 0x02, 0x04):
+            with self.subTest(button=button):
+                self.mouse._key_state.side_effect = lambda key: -32767 if key == button else 0
+                self.assertTrue(self.mouse.button_held())
+
 
 if __name__ == "__main__":
     unittest.main()
