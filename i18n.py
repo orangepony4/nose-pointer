@@ -67,6 +67,10 @@ MESSAGES = {
     "hint_paused": ("Input paused while tracking is unavailable.", "Лицо потеряно или кадры задерживаются. Ввод приостановлен."),
     "safety_jump": ("Face moved suddenly. System control is off.", "Лицо резко сместилось. Управление выключено."),
     "safety_loss": ("Face out of view too long. System control is off.", "Лицо долго не было видно. Управление выключено."),
+    "safety_stale_preview": (
+        "Camera frames were delayed. Enable mouse again after calibration.",
+        "Кадры задержались. Снова включите мышь после калибровки.",
+    ),
     "safety_multiple": ("Multiple faces detected. System control is off.", "В кадре несколько лиц. Управление выключено."),
     "safety_pointer_moved": (
         "Click cancelled. The pointer is elsewhere. System control is off.",
@@ -74,6 +78,7 @@ MESSAGES = {
     ),
     "safety_jump_brief": ("Face moved suddenly.", "Лицо резко сместилось."),
     "safety_loss_brief": ("Face out of view too long.", "Лицо долго не было видно."),
+    "safety_stale_preview_brief": ("Camera frames were delayed.", "Кадры задержались."),
     "safety_multiple_brief": ("Multiple faces detected.", "В кадре несколько лиц."),
     "safety_pointer_moved_brief": ("Click cancelled because the pointer moved.", "Клик отменён. Указатель переместился."),
     "instruction_wink": ("Wink with one eye, then reopen it.", "Подмигните одним глазом и откройте его."),

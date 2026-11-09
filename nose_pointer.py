@@ -61,6 +61,7 @@ class PointerApp:
         self.active = False
         self.recenter_held = False
         self.last_frame = None
+        self.last_ready_frame_at: float | None = None
         self.last_active_face_at: float | None = None
         self.last_applied_position = None
         self.recovery_pending = False
@@ -517,10 +518,15 @@ class PointerApp:
             return
         if not self.can_enable or self.mouse.emergency_requested():
             return
+        now = monotonic()
+        ready_at = self.last_ready_frame_at
+        if ready_at is None or not ready_at <= now <= ready_at + self.settings.max_sample_gap_seconds:
+            self.pause_for_safety("safety_stale_preview")
+            return
         self.safety_notice = ""
         self.set_footer_notice()
         self.recenter_held = self.mouse.recenter_requested()
-        self.last_active_face_at = monotonic()
+        self.last_active_face_at = now
         self.active = True
         self.language_picker.configure(state="disabled")
         self.sensitivity_picker.configure(state="disabled")
@@ -537,6 +543,7 @@ class PointerApp:
     def reset_calibration(self):
         self.tracker.reset()
         self.can_enable = False
+        self.last_ready_frame_at = None
         self.last_applied_position = None
         self.recovery_pending = False
         self.dwell_bar.configure(value=0)
@@ -600,6 +607,7 @@ class PointerApp:
                     return
 
         can_enable = result.state == "tracking"
+        self.last_ready_frame_at = now if can_enable else None
         if self.can_enable != can_enable:
             self.can_enable = can_enable
             self.refresh_right_dwell_button()

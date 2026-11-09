@@ -273,6 +273,52 @@ class PreviewTests(unittest.TestCase):
         self.feed(0.8)
         self.mouse.move.assert_called_once_with(0.3, 0.6)
 
+    def test_enable_accepts_a_ready_frame_at_the_freshness_boundary(self):
+        self.calibrate(0)
+        self.clock.return_value = 0.31 + self.app.settings.max_sample_gap_seconds
+        self.app.toggle_pointer()
+        self.assertTrue(self.app.active)
+        self.assert_no_system_input()
+
+    def test_stale_preview_enable_requires_new_calibration_and_explicit_retry(self):
+        self.calibrate(0)
+        self.assertTrue(self.app.can_enable)
+        self.clock.return_value = 0.31 + self.app.settings.max_sample_gap_seconds + 0.001
+        self.app.toggle_pointer()
+        self.assertFalse(self.app.active)
+        self.assertFalse(self.app.can_enable)
+        self.assertFalse(self.app.tracker.calibrated)
+        self.assertEqual(self.app.safety_notice, "safety_stale_preview")
+        self.assert_no_system_input()
+
+        self.feed(0.31, wall_time=0.6)
+        self.app.toggle_pointer()
+        self.assertFalse(self.app.active)
+        self.calibrate(0.7)
+        self.assertTrue(self.app.can_enable)
+        self.assertFalse(self.app.active)
+        self.assert_no_system_input()
+        self.mouse.position.assert_not_called()
+
+        self.app.toggle_pointer()
+        self.assertTrue(self.app.active)
+        self.assertFalse(self.app.safety_notice)
+        self.calibrate(1.1)
+        self.feed(1.5, MOVED_FACE)
+        self.mouse.move.assert_called_once()
+        self.mouse.click.assert_not_called()
+
+    def test_enable_requires_a_tracking_face_and_stays_off_after_loss(self):
+        self.app.toggle_pointer()
+        self.assertFalse(self.app.active)
+        self.calibrate(0)
+        self.assertTrue(self.app.can_enable)
+        self.feed(0.4, None)
+        self.app.toggle_pointer()
+        self.assertFalse(self.app.active)
+        self.assertFalse(self.app.can_enable)
+        self.assert_no_system_input()
+
     def test_f9_cancels_pending_wink_and_a_held_key_does_not_restart_calibration(self):
         self.arm_system_pointer()
         self.feed(0.80, LEFT_WINK)
