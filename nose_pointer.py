@@ -783,7 +783,8 @@ class PointerApp:
             # Inference can publish a frame captured before the new calibration was requested.
             return
         anchor = self.mouse.position() if self.active and calibrating and sample is not None else None
-        result = self.tracker.update(now, sample, calibration_position=anchor)
+        dwell_projection = self.mouse.visible_position if self.active and self.settings.dwell_seconds is not None else None
+        result = self.tracker.update(now, sample, calibration_position=anchor, dwell_projection=dwell_projection)
         if self.right_dwell_armed_at is not None and now < self.right_dwell_armed_at:
             # Frames already captured when the button was pressed cannot arm the next click.
             self.tracker.reset_dwell()

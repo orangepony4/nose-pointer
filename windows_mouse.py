@@ -188,9 +188,11 @@ class WindowsMouse:
 
     def _checked_layout(self):
         rectangles = self._monitor_rectangles()
-        if self._control_layout is not None and tuple(sorted(rectangles)) != self._control_layout:
+        if self._control_layout is None:
+            return rectangles
+        if tuple(sorted(rectangles)) != self._control_layout:
             raise DisplayLayoutChanged
-        return rectangles
+        return self._control_layout
 
     def _monitor_rectangles(self):
         rectangles = []
@@ -227,13 +229,9 @@ class WindowsMouse:
             raise _input_error("GetCursorPos could not read the cursor", ctypes.get_last_error())
         return self._normalize_position(point.x, point.y, bounds)
 
-    def move(self, x: float, y: float) -> tuple[float, float]:
-        """Move to a visible pixel and return its normalized coordinates."""
-        if not math.isfinite(x) or not math.isfinite(y):
-            raise ValueError("Cursor coordinates must be finite.")
-
-        rectangles = self._checked_layout()
-        bounds = self._desktop_bounds(rectangles)
+    @classmethod
+    def _project_pixel(cls, x, y, rectangles):
+        bounds = cls._desktop_bounds(rectangles)
         left, top, right, bottom = bounds
         pixel_x = left + round(min(max(x, 0.0), 1.0) * (right - left - 1))
         pixel_y = top + round(min(max(y, 0.0), 1.0) * (bottom - top - 1))
@@ -246,7 +244,21 @@ class WindowsMouse:
         target_x, target_y = min(
             candidates, key=lambda point: (point[0] - pixel_x) ** 2 + (point[1] - pixel_y) ** 2
         )
+        return target_x, target_y, bounds
 
+    def visible_position(self, x: float, y: float) -> tuple[float, float]:
+        """Project a dwell position using the reserved layout without querying Windows."""
+        if self._control_layout is None:
+            raise OSError("Mouse control is required to project a visible position.")
+        pixel_x, pixel_y, bounds = self._project_pixel(x, y, self._control_layout)
+        return self._normalize_position(pixel_x, pixel_y, bounds)
+
+    def move(self, x: float, y: float) -> tuple[float, float]:
+        """Move to a visible pixel and return its normalized coordinates."""
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise ValueError("Cursor coordinates must be finite.")
+
+        target_x, target_y, bounds = self._project_pixel(x, y, self._checked_layout())
         ctypes.set_last_error(0)
         if not self._set_cursor_pos(target_x, target_y):
             raise _input_error("SetCursorPos could not move the cursor", ctypes.get_last_error())

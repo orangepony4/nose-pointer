@@ -1,5 +1,6 @@
 """Map normalized face samples to pointer positions and optional clicks."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from math import dist, expm1, hypot, isfinite
 from typing import Literal
@@ -135,6 +136,7 @@ class Tracker:
     def update(
         self, now: float, sample: FaceSample | None,
         *, calibration_position: tuple[float, float] | None = None,
+        dwell_projection: Callable[[float, float], tuple[float, float]] | None = None,
     ) -> TrackingOutput:
         """Process a monotonic observation, optionally anchoring completed calibration."""
         if not isfinite(now) or (self._last_update is not None and now < self._last_update):
@@ -215,7 +217,11 @@ class Tracker:
         self._position = self._move(target, elapsed)
         if dwell_seconds is None:
             return TrackingOutput(self._position, None, "tracking", 1.0)
-        click, progress = self._advance_dwell(now, target, dwell_seconds)
+        position = self._position
+        if dwell_projection is not None:
+            target = dwell_projection(*target)
+            position = dwell_projection(*position)
+        click, progress = self._advance_dwell(now, target, position, dwell_seconds)
         return TrackingOutput(self._position, click, "tracking", 1.0, progress)
 
     def _hold(self, state: TrackingState, click: Click | None = None) -> TrackingOutput:
@@ -297,18 +303,19 @@ class Tracker:
         return self._hold("wink")
 
     def _advance_dwell(
-        self, now: float, target: tuple[float, float], duration: float
+        self, now: float, target: tuple[float, float], position: tuple[float, float], duration: float
     ) -> tuple[Click | None, float]:
         radius = self.settings.dwell_radius
         if self._dwell_origin is None:
             self._dwell_origin = target
             return None, 0.0
         if not self._dwell_armed:
-            if dist(target, self._dwell_origin) < 2 * radius:
+            rearm_distance = 2 * radius
+            if (dist(target, self._dwell_origin) < rearm_distance
+                    or dist(position, self._dwell_origin) < rearm_distance):
                 return None, 0.0
             self._dwell_armed = True
 
-        position = self._position
         settled = dist(position, target) <= radius
         if settled and self._dwell_candidate is not None:
             anchor, started_at = self._dwell_candidate

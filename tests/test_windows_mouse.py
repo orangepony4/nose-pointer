@@ -63,6 +63,22 @@ class WindowsMouseTests(unittest.TestCase):
         self.fake_cursor(0, 1000)
         self.assertEqual(snapped, self.mouse.position())
 
+    def test_visible_position_matches_move_using_the_reserved_display_order(self):
+        displays = [(0, 0, 100, 200), (201, 0, 300, 200)]
+        self.mouse._monitor_rectangles.return_value = displays
+        self.mouse.begin_control()
+        self.mouse._monitor_rectangles.reset_mock()
+        self.mouse._monitor_rectangles.return_value = displays[::-1]
+
+        equidistant = (150 / 299, 100 / 199)
+        visible = self.mouse.visible_position(*equidistant)
+        self.assertEqual(visible, (99 / 299, 100 / 199))
+        self.mouse._monitor_rectangles.assert_not_called()
+        self.mouse._set_cursor_pos.assert_not_called()
+        self.assertEqual(self.mouse.move(*equidistant), visible)
+        self.mouse._monitor_rectangles.assert_called_once_with()
+        self.mouse._set_cursor_pos.assert_called_once_with(99, 100)
+
     def test_position_clamps_outside_reported_bounds_and_handles_one_pixel(self):
         self.fake_cursor(-2000, 1200)
         self.assertEqual(self.mouse.position(), (0.0, 1.0))

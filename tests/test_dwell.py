@@ -86,6 +86,18 @@ class DwellTests(unittest.TestCase):
         clicks = [tracker.update(0.95 + step * 0.17, face(0.56)).click for step in range(21)]
         self.assertEqual([click for click in clicks if click is not None], ["left"])
 
+    def test_brief_target_jump_does_not_rearm_before_the_smoothed_pointer_moves_away(self):
+        tracker = self.tracker(smoothing_seconds=0.3, dwell_seconds=0.3)
+        tracker.update(0.0, face())
+        held = [tracker.update(step / 10, face(0.54)) for step in range(1, 15)]
+        self.assertEqual([output.click for output in held if output.click], ["left"])
+
+        flicker = tracker.update(1.401, face(0.57))
+        self.assertAlmostEqual(flicker.position[0], held[-1].position[0], delta=0.001)
+        self.assertIsNone(flicker.click)
+        returned = [tracker.update(step / 10, face(0.54)) for step in range(15, 22)]
+        self.assertTrue(all(output.click is None for output in returned))
+
     def test_eye_closure_cancels_progress_and_reopening_is_never_a_wink_click(self):
         for closed in (face(0.54, left=0.9), face(0.54, right=0.9), face(0.54, left=0.9, right=0.9)):
             with self.subTest(closed=closed):

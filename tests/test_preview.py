@@ -6,7 +6,7 @@ from unittest.mock import Mock, call, patch
 import camera
 from nose_pointer import DWELL_MODE, MOTION_MODE, WINK_MODE, PointerApp
 from tracking import FaceSample, Settings
-from windows_mouse import ControlSessionBusy, DisplayLayoutChanged, PointerMoved
+from windows_mouse import ControlSessionBusy, DisplayLayoutChanged, PointerMoved, WindowsMouse
 
 
 OPEN_FACE = FaceSample(0.50, 0.50, 0.1, 0.1)
@@ -42,6 +42,7 @@ class PreviewTests(unittest.TestCase):
             return x, y
 
         self.mouse.move.side_effect = move_cursor
+        self.mouse.visible_position.side_effect = lambda x, y: (x, y)
         self.camera = Mock()
         self.camera.thread.is_alive.return_value = True
         self.camera.stop_event.is_set.return_value = False
@@ -782,6 +783,52 @@ class PreviewTests(unittest.TestCase):
         self.assert_no_system_input()
         self.assertIsNone(self.app.right_dwell_armed_at)
         self.assertTrue(self.app.active)
+
+    def test_dwell_uses_visible_motion_near_a_display_gap(self):
+        displays = ((0, 0, 100, 100), (100, 0, 200, 200))
+        adapter = object.__new__(WindowsMouse)
+        adapter._control_layout = displays
+        adapter._monitor_rectangles = Mock(return_value=displays)
+        self.mouse.position.return_value = (120 / 199, 150 / 199)
+        self.enterContext(patch("windows_mouse.ctypes.set_last_error", create=True))
+
+        def move_cursor(x, y):
+            self.mouse.position.return_value = (x / 199, y / 199)
+            return True
+
+        adapter._set_cursor_pos = Mock(side_effect=move_cursor)
+        self.mouse.move.side_effect = adapter.move
+        self.mouse.visible_position.side_effect = lambda x, y: adapter.visible_position(x, y)
+        self.select_quick_dwell()
+        self.arm_system_pointer()
+
+        for now in (0.80, 0.96, 1.12, 1.28, 1.41):
+            self.feed(now, replace(OPEN_FACE, nose_x=0.536))
+        at_edge = (100 / 199, 150 / 199)
+        self.assertEqual(self.app.last_applied_position, at_edge)
+        self.mouse.click.assert_called_once_with("left", expected_position=at_edge)
+
+        for now in (1.58, 1.74, 1.90, 2.06, 2.19):
+            self.feed(now, replace(OPEN_FACE, nose_x=0.549))
+        self.assertEqual(self.app.last_applied_position, at_edge)
+        self.mouse.click.assert_called_once()
+        self.assertEqual(self.app.dwell_bar.configure.call_args.kwargs["value"], 0)
+
+        for now in (2.33, 2.49, 2.65, 2.81, 2.94):
+            self.feed(now, OPEN_FACE)
+        self.assertEqual(self.mouse.click.call_args_list, [
+            call("left", expected_position=at_edge),
+            call("left", expected_position=(120 / 199, 150 / 199)),
+        ])
+
+        adapter._monitor_rectangles.return_value = ((0, 0, 100, 90), displays[1])
+        adapter._set_cursor_pos.reset_mock()
+        self.mouse.click.reset_mock()
+        self.feed(3.10, OPEN_FACE)
+        self.assertFalse(self.app.active)
+        self.assertEqual(self.app.safety_notice, "safety_display_changed")
+        adapter._set_cursor_pos.assert_not_called()
+        self.mouse.click.assert_not_called()
 
     def test_dwell_click_is_cancelled_when_windows_clamps_the_pointer(self):
         self.select_quick_dwell()
