@@ -33,7 +33,9 @@ jobs:
         run: |
           $archive = Join-Path $env:RUNNER_TEMP 'nose-pointer.zip'
           $destination = Join-Path $env:RUNNER_TEMP 'Nose Pointer Проверка'
-          git archive --format=zip --output $archive HEAD
+          git -c core.autocrlf=false archive --format=zip --output $archive HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys, zipfile; data = zipfile.ZipFile(sys.argv[1]).read('Start Nose Pointer.cmd'); assert data.count(b'\r\n') == data.count(b'\n') > 0, 'The launcher needs CRLF in the Windows ZIP'" $archive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Expand-Archive -LiteralPath $archive -DestinationPath $destination
           Set-Location -LiteralPath $destination
