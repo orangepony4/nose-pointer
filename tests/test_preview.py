@@ -55,7 +55,7 @@ class PreviewTests(unittest.TestCase):
         self.app = self.create_app(Settings(calibration_seconds=0.3, smoothing_seconds=0))
         with patch("nose_pointer.Camera", return_value=self.camera) as factory:
             self.app.toggle_camera()
-        factory.assert_called_once_with(0)
+        factory.assert_called_once_with(0, max_sample_gap_seconds=self.app.settings.max_sample_gap_seconds)
         self.camera.start.assert_called_once_with()
 
     def create_app(self, settings, *, no_clicks=False):
@@ -96,7 +96,7 @@ class PreviewTests(unittest.TestCase):
         self.mouse.click.assert_not_called()
 
     def attach_camera_feed(self):
-        source = camera.Camera(0)
+        source = camera.Camera(0, max_sample_gap_seconds=self.app.settings.max_sample_gap_seconds)
         source.thread = Mock()
         source.thread.is_alive.return_value = True
         self.app.camera = source
@@ -146,6 +146,55 @@ class PreviewTests(unittest.TestCase):
             self.app.poll()
         self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
 
+    def test_unpolled_nose_displacement_uses_the_calibrated_safety_limit(self):
+        self.app.apply_tracking_settings(replace(self.app.settings, max_nose_jump=0.125))
+        for nose_x, jumped in ((0.625, False), (0.65625, True)):
+            with self.subTest(nose_x=nose_x):
+                self.app.disable_input()
+                self.app.camera = self.camera
+                self.arm_system_pointer()
+                self.feed(0.80, LEFT_WINK)
+                self.feed(0.92, LEFT_WINK)
+                source = self.attach_camera_feed()
+                source.publish(0.94, LEFT_WINK)
+                source.publish(0.98, replace(LEFT_WINK, nose_x=nose_x))
+                source.publish(1.08, OPEN_FACE)
+                self.clock.return_value = 1.08
+                self.app.poll()
+                self.app.poll()
+
+                if jumped:
+                    self.assert_no_system_input()
+                    self.assertFalse(self.app.active)
+                    self.assertEqual(self.app.safety_notice, "safety_jump")
+                    self.mouse.end_control.assert_called_once_with()
+                else:
+                    self.assertTrue(self.app.active)
+                    self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
+
+    def test_unpolled_nose_displacement_does_not_interrupt_practice(self):
+        source = self.attach_camera_feed()
+        far = replace(OPEN_FACE, nose_x=0.78)
+        for timestamp, sample in ((0.05, OPEN_FACE), (0.10, far), (0.15, OPEN_FACE)):
+            source.publish(timestamp, sample)
+        self.clock.return_value = 0.15
+        self.app.poll()
+        self.assertFalse(self.app.tracker.calibrated)
+        self.assertEqual(self.app.safety_notice, "")
+
+        for timestamp in (0.25, 0.35, 0.46):
+            source.publish(timestamp, OPEN_FACE)
+            self.clock.return_value = timestamp
+            self.app.poll()
+        for timestamp, sample in ((0.50, OPEN_FACE), (0.56, far), (0.64, OPEN_FACE)):
+            source.publish(timestamp, sample)
+        self.clock.return_value = 0.64
+        self.app.poll()
+        self.assertTrue(self.app.can_enable)
+        self.assertFalse(self.app.active)
+        self.assertEqual(self.app.safety_notice, "")
+        self.assert_no_system_input()
+
     def test_motion_only_uses_the_latest_frame_when_unpolled_eyes_close(self):
         self.app.click_mode.set(self.app.text(MOTION_MODE))
         self.app.change_click_mode()
@@ -161,12 +210,13 @@ class PreviewTests(unittest.TestCase):
         self.mouse.move.assert_called_once()
         self.mouse.click.assert_not_called()
 
-    def test_recenter_discards_queued_blink_evidence_before_a_new_wink(self):
+    def test_recenter_discards_queued_face_interruptions_before_a_new_wink(self):
         self.arm_system_pointer()
         self.feed(0.80, LEFT_WINK)
         self.feed(0.92, LEFT_WINK)
         source = self.attach_camera_feed()
-        source.publish(0.98, replace(LEFT_WINK, right_blink=0.9))
+        source.publish(0.94, LEFT_WINK)
+        source.publish(0.98, replace(LEFT_WINK, nose_x=0.78, right_blink=0.9))
         source.publish(1.08, OPEN_FACE)
         self.clock.return_value = 1.08
         self.mouse.recenter_requested.return_value = True
@@ -564,13 +614,13 @@ class PreviewTests(unittest.TestCase):
         self.app.camera_index.set(" 1 ")
         with patch("nose_pointer.Camera", return_value=other_camera) as factory:
             self.app.toggle_camera()
-            factory.assert_called_once_with(1)
+            factory.assert_called_once_with(1, max_sample_gap_seconds=self.app.settings.max_sample_gap_seconds)
             other_camera.start.assert_called_once_with()
             self.assertEqual(self.app.camera_index.get(), "1")
             self.app.camera_picker.configure.assert_called_with(state="disabled")
             self.app.toggle_camera()
             other_camera.stop.assert_called_once_with()
-            factory.assert_called_once_with(1)
+            factory.assert_called_once_with(1, max_sample_gap_seconds=self.app.settings.max_sample_gap_seconds)
             self.app.camera_picker.configure.assert_called_with(state="disabled")
 
         other_camera.thread.is_alive.return_value = False
@@ -592,7 +642,7 @@ class PreviewTests(unittest.TestCase):
             self.app.camera_index.set(str(index))
             with patch("nose_pointer.Camera", return_value=self.camera) as factory:
                 self.app.toggle_camera()
-            factory.assert_called_once_with(index)
+            factory.assert_called_once_with(index, max_sample_gap_seconds=self.app.settings.max_sample_gap_seconds)
 
         self.calibrate(0)
         finish_camera()

@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from math import dist, expm1, hypot, isfinite
+from math import dist, expm1, isfinite
 from typing import Literal
 
 Click = Literal["left", "right"]
@@ -69,6 +69,10 @@ class FaceSample:
     nose_y: float
     left_blink: float
     right_blink: float
+
+    @property
+    def nose_position(self) -> tuple[float, float]:
+        return self.nose_x, self.nose_y
 
     @property
     def is_valid(self) -> bool:
@@ -173,10 +177,8 @@ class Tracker:
             return self._hold("paused")
 
         previous_nose = self._last_nose
-        self._last_nose = (sample.nose_x, sample.nose_y)
-        if previous_nose is not None and hypot(
-            sample.nose_x - previous_nose[0], sample.nose_y - previous_nose[1]
-        ) > self.settings.max_nose_jump:
+        self._last_nose = sample.nose_position
+        if previous_nose is not None and dist(self._last_nose, previous_nose) > self.settings.max_nose_jump:
             self._neutral = None
             self._origin = (0.5, 0.5)
             self._position = self._origin

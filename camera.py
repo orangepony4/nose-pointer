@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from hashlib import sha256
+from math import dist
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from threading import Event, Lock, Thread
@@ -9,7 +10,7 @@ from time import monotonic
 from urllib.request import urlopen
 
 from i18n import translate
-from tracking import FaceSample
+from tracking import FaceSample, Settings
 
 
 MODEL_PATH = Path(__file__).resolve().parent / "models" / "face_landmarker.task"
@@ -21,6 +22,7 @@ MODEL_SHA256 = "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff
 MODEL_SIZE = 3_758_596
 NOSE_TIP = 1
 AMBIGUOUS_FACE = object()
+FACE_JUMP = object()
 
 
 class CameraError(RuntimeError):
@@ -105,13 +107,15 @@ def _infer_frame(cv2, mp, landmarker, frame, timestamp):
 
 
 class Camera:
-    def __init__(self, index):
+    def __init__(self, index, *, max_sample_gap_seconds=Settings.max_sample_gap_seconds):
         self.index = index
+        self.max_sample_gap_seconds = max_sample_gap_seconds
         self.stop_event = Event()
         self.lock = Lock()
         self.latest = None
         self.pending_pause = None
         self._unread_blink_peaks = (None, None)
+        self._unread_nose_jump = None
         self.error = None
         self.thread = Thread(target=self.run, name="webcam", daemon=True)
 
@@ -121,12 +125,19 @@ class Camera:
     def stop(self):
         self.stop_event.set()
 
-    def snapshot(self, *, interrupts_gesture=None, after_capture_at=None):
+    def snapshot(self, *, interrupts_gesture=None, after_capture_at=None, max_nose_jump=None):
         """Read the latest frame or a fresh tracking or gesture interruption."""
         with self.lock:
             peaks, self._unread_blink_peaks = self._unread_blink_peaks, (None, None)
-            if self.pending_pause is not None:
-                pause, self.pending_pause = self.pending_pause, None
+            jump, self._unread_nose_jump = self._unread_nose_jump, None
+            pause, self.pending_pause = self.pending_pause, None
+            if pause is not None and pause[1] is AMBIGUOUS_FACE:
+                return pause, self.error
+            if max_nose_jump is not None and jump is not None:
+                captured_at, distance = jump
+                if distance > max_nose_jump and (after_capture_at is None or captured_at > after_capture_at):
+                    return (captured_at, FACE_JUMP), self.error
+            if pause is not None:
                 return pause, self.error
             if interrupts_gesture is not None and self.latest is not None:
                 _, sample = self.latest
@@ -145,12 +156,14 @@ class Camera:
         if isinstance(sample, FaceSample) and not sample.is_valid:
             sample = None
         with self.lock:
+            previous = self.latest
             self.latest = captured_at, sample
             # A fast next frame must not hide a pause from the UI. Ambiguity
             # disables input, so it takes precedence over a missing face.
             if sample is AMBIGUOUS_FACE or (sample is None and self.pending_pause is None):
                 self.pending_pause = self.latest
             elif isinstance(sample, FaceSample):
+                self._remember_nose_jump(previous, captured_at, sample)
                 # Two samples are enough to keep the strongest evidence for each eye.
                 left, right = self._unread_blink_peaks
                 if left is None or sample.left_blink >= left[1].left_blink:
@@ -158,6 +171,16 @@ class Camera:
                 if right is None or sample.right_blink >= right[1].right_blink:
                     right = self.latest
                 self._unread_blink_peaks = left, right
+
+    def _remember_nose_jump(self, previous, captured_at, sample):
+        if previous is None or not isinstance(previous[1], FaceSample):
+            return
+        previous_at, previous_sample = previous
+        if not 0 < captured_at - previous_at <= self.max_sample_gap_seconds:
+            return
+        distance = dist(previous_sample.nose_position, sample.nose_position)
+        if self._unread_nose_jump is None or distance >= self._unread_nose_jump[1]:
+            self._unread_nose_jump = captured_at, distance
 
     def run(self):
         try:

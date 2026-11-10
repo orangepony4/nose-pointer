@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import Mock, call, patch
 
 from camera import (
-    AMBIGUOUS_FACE, Camera, CameraError, check_inference, create_landmarker, download_model, extract_sample,
+    AMBIGUOUS_FACE, FACE_JUMP, Camera, CameraError, check_inference, create_landmarker, download_model, extract_sample,
     model_is_ready,
 )
 from tracking import FaceSample
@@ -425,6 +425,45 @@ class CameraTests(unittest.TestCase):
                 paused_at = 0.2 if pause is AMBIGUOUS_FACE else 0.1
                 self.assertEqual(camera.snapshot(interrupts_gesture=interrupts), ((paused_at, pause), None))
                 self.assertEqual(camera.snapshot(interrupts_gesture=interrupts), ((0.4, FACE), None))
+
+    def test_unread_nose_jump_is_fresh_and_consumed_once(self):
+        camera = Camera(0)
+        far = replace(FACE, nose_x=0.8)
+        nearby = replace(FACE, nose_x=0.75)
+        camera.publish(0.1, FACE)
+        camera.publish(0.2, far)
+        camera.publish(0.3, nearby)
+        self.assertEqual(camera.snapshot(max_nose_jump=0.2, after_capture_at=0.2), ((0.3, nearby), None))
+        self.assertEqual(camera.snapshot(max_nose_jump=0.2), ((0.3, nearby), None))
+
+        camera.publish(0.4, FACE)
+        camera.publish(0.5, replace(FACE, nose_x=0.45))
+        latest = (0.5, replace(FACE, nose_x=0.45))
+        self.assertEqual(camera.snapshot(max_nose_jump=0.2, after_capture_at=0.3), ((0.4, FACE_JUMP), None))
+        self.assertEqual(camera.snapshot(max_nose_jump=0.2), (latest, None))
+
+    def test_nose_jump_requires_uninterrupted_valid_samples_at_distinct_times(self):
+        far = replace(FACE, nose_x=0.8)
+        for name, previous, latest_at in (("stale gap", None, 0.3), ("same time", None, 0.1),
+                                           ("invalid frame", replace(FACE, nose_x=float("nan")), 0.2)):
+            with self.subTest(name=name):
+                camera = Camera(0, max_sample_gap_seconds=0.125)
+                camera.publish(0.1, FACE)
+                if previous is not None:
+                    camera.publish(0.15, previous)
+                camera.publish(latest_at, far)
+                if previous is not None:
+                    self.assertEqual(camera.snapshot(max_nose_jump=0.2), ((0.15, None), None))
+                self.assertEqual(camera.snapshot(max_nose_jump=0.2), ((latest_at, far), None))
+
+    def test_ambiguity_takes_priority_over_an_unread_nose_jump(self):
+        camera = Camera(0)
+        camera.publish(0.1, FACE)
+        camera.publish(0.2, replace(FACE, nose_x=0.8))
+        camera.publish(0.25, AMBIGUOUS_FACE)
+        camera.publish(0.3, FACE)
+        self.assertEqual(camera.snapshot(max_nose_jump=0.2), ((0.25, AMBIGUOUS_FACE), None))
+        self.assertEqual(camera.snapshot(max_nose_jump=0.2), ((0.3, FACE), None))
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from dataclasses import replace
 from time import monotonic
 from tkinter import ttk
 
-from camera import AMBIGUOUS_FACE, Camera, CameraError, check_inference, download_model
+from camera import AMBIGUOUS_FACE, FACE_JUMP, Camera, CameraError, check_inference, download_model
 from i18n import LANGUAGES, load_language, save_language, translate
 from preferences import load_text_preference, save_preference
 from tracking import Settings, Tracker
@@ -665,7 +665,7 @@ class PointerApp:
         self.set_button("camera_button", "stop_camera")
         self.camera_picker.configure(state="disabled")
         try:
-            self.camera = Camera(index)
+            self.camera = Camera(index, max_sample_gap_seconds=self.settings.max_sample_gap_seconds)
             self.camera.start()
             self.camera_index_to_save = index if index != self.last_camera_index else None
         except (OSError, RuntimeError) as error:
@@ -886,8 +886,10 @@ class PointerApp:
             else:
                 self.recenter_held = False
         if self.camera:
+            jump_limit = self.settings.max_nose_jump if self.active and self.tracker.calibrated else None
             latest, error = self.camera.snapshot(
                 interrupts_gesture=self.tracker.interrupts_pending_click, after_capture_at=self.last_frame,
+                max_nose_jump=jump_limit,
             )
             now = monotonic()
             if (self.active and self.last_active_face_at is not None
@@ -905,10 +907,11 @@ class PointerApp:
             elif latest and not self.camera.stop_event.is_set():
                 captured_at, sample = latest
                 try:
-                    if sample is AMBIGUOUS_FACE:
+                    if sample is AMBIGUOUS_FACE or sample is FACE_JUMP:
                         if self.last_frame != captured_at:
                             self.last_frame = captured_at
-                            self.pause_for_safety("safety_multiple")
+                            reason = "safety_multiple" if sample is AMBIGUOUS_FACE else "safety_jump"
+                            self.pause_for_safety(reason)
                     elif now - captured_at > self.settings.max_sample_gap_seconds:
                         if not self.feed_stale:
                             self.feed_stale = True
