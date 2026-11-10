@@ -117,6 +117,39 @@ class DwellTests(unittest.TestCase):
         self.hold_without_click(tracker, target, 0.10, 0.28, 0.46, 0.62)
         self.assertEqual(tracker.update(0.72, target).click, "left")
 
+    def test_one_eye_dwell_calibrates_clicks_and_recovers_after_interruptions(self):
+        for eye in ("left", "right"):
+            with self.subTest(eye=eye):
+                other = "right" if eye == "left" else "left"
+                other_closed = {other: 0.95}
+                tracker = self.tracker(calibration_seconds=0.3, dwell_eye=eye)
+                baseline = face(**other_closed)
+                target = face(0.54, **other_closed)
+                self.assertTrue(self.hold_without_click(tracker, baseline, 0.0, 0.10, 0.20, 0.31).calibrated)
+
+                self.hold_without_click(tracker, target, 0.40, 0.58)
+                for now, closed in ((0.70, face(0.54, **{eye: 0.9})),
+                                    (0.74, face(0.54, left=0.9, right=0.9))):
+                    output = self.hold_without_click(tracker, closed, now)
+                    self.assertIsNone(output.position)
+                    self.assertEqual(output.dwell_progress, 0)
+                self.hold_without_click(tracker, target, 0.80, 0.98, 1.16, 1.34)
+                self.assertEqual(tracker.update(1.41, target).click, "left")
+
+                second_target = face(0.58, **other_closed)
+                self.hold_without_click(tracker, second_target, 1.55, 1.73, 1.91)
+                self.assertEqual(tracker.update(2.05, None).state, "paused")
+                self.hold_without_click(tracker, second_target, 2.12, 2.30, 2.48, 2.66, 2.84)
+                self.hold_without_click(tracker, target, 2.98, 3.16, 3.34, 3.52)
+                self.assertEqual(tracker.update(3.60, target).click, "left")
+
+    def test_default_dwell_still_requires_both_eyes_for_calibration(self):
+        tracker = self.tracker(calibration_seconds=0.3)
+        output = self.hold_without_click(tracker, face(right=0.95), 0.0, 0.10, 0.20, 0.31, 0.46)
+        self.assertFalse(output.calibrated)
+        self.assertEqual(output.calibration_progress, 0)
+        self.assertIsNone(output.position)
+
     def test_loss_stale_frames_jump_and_reset_require_new_motion(self):
         for interruption in ("loss", "invalid", "stale", "jump", "reset"):
             with self.subTest(interruption=interruption):

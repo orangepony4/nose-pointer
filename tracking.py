@@ -28,6 +28,7 @@ class Settings:
     dwell_seconds: float | None = None
     dwell_radius: float = 0.02
     motion_only: bool = False
+    dwell_eye: Literal["left", "right"] | None = None
 
     def __post_init__(self) -> None:
         ranges = (self.range_x, self.range_y, self.dead_zone)
@@ -45,6 +46,8 @@ class Settings:
             raise ValueError("Dwell duration must be finite and positive.")
         if self.motion_only and self.dwell_seconds is not None:
             raise ValueError("Motion-only mode cannot use dwell clicks.")
+        if self.dwell_eye not in (None, "left", "right"):
+            raise ValueError("Dwell eye must be left or right.")
         if not 0 < self.dwell_radius <= 0.25:
             raise ValueError("Dwell radius must be greater than zero and at most 0.25.")
 
@@ -190,7 +193,7 @@ class Tracker:
         eyes_open = self.settings.motion_only or (left_open and right_open)
         dwell_seconds = self.settings.dwell_seconds
         if dwell_seconds is not None:
-            # Dwell needs no wink gesture. Only a clear closure interrupts it.
+            # Only a clear closure of a monitored eye interrupts dwell.
             eyes_open = self._dwell_eyes_open(sample)
 
         if not self.calibrated:
@@ -272,7 +275,12 @@ class Tracker:
         return TrackingOutput(self._position, None, "tracking", 1.0)
 
     def _dwell_eyes_open(self, sample: FaceSample) -> bool:
-        return max(sample.left_blink, sample.right_blink) < self.settings.closed_threshold
+        eye = self.settings.dwell_eye
+        if eye is None:
+            score = max(sample.left_blink, sample.right_blink)
+        else:
+            score = sample.left_blink if eye == "left" else sample.right_blink
+        return score < self.settings.closed_threshold
 
     def _other_eye_open(self, side: Click, sample: FaceSample) -> bool:
         other_score = sample.right_blink if side == "left" else sample.left_blink

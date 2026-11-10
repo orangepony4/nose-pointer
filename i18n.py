@@ -56,6 +56,14 @@ MESSAGES = {
         "Калибровка на месте. Смотрите прямо и откройте оба глаза.",
     ),
     "status_recenter_motion": ("Calibrating in place. Look straight ahead.", "Калибровка на месте. Смотрите прямо."),
+    "status_recenter_left": (
+        "Calibrating in place. Look straight ahead with your left eye open.",
+        "Калибровка на месте. Смотрите прямо и держите левый глаз открытым.",
+    ),
+    "status_recenter_right": (
+        "Calibrating in place. Look straight ahead with your right eye open.",
+        "Калибровка на месте. Смотрите прямо и держите правый глаз открытым.",
+    ),
     "hint_calibrating": (
         "Calibration {progress}% · Look straight ahead and keep both eyes open.",
         "Калибровка {progress}% · Смотрите прямо и держите оба глаза открытыми.",
@@ -64,10 +72,20 @@ MESSAGES = {
         "Calibration {progress}% · Look straight ahead and stay in view.",
         "Калибровка {progress}% · Смотрите прямо и держите лицо в кадре.",
     ),
+    "hint_calibrating_left": (
+        "Calibration {progress}% · Keep your left eye open and look straight ahead.",
+        "Калибровка {progress}% · Смотрите прямо и держите левый глаз открытым.",
+    ),
+    "hint_calibrating_right": (
+        "Calibration {progress}% · Keep your right eye open and look straight ahead.",
+        "Калибровка {progress}% · Смотрите прямо и держите правый глаз открытым.",
+    ),
     "hint_tracking": ("Face in view. Move your nose a little to steer.", "Лицо в кадре. Двигайте носом небольшими движениями."),
     "hint_wink": ("Wink detected. The pointer waits until you reopen your eye.", "Подмигивание. Точка ждёт, пока глаз откроется."),
     "hint_rearming": ("Keep both eyes open to continue.", "Держите оба глаза открытыми, чтобы продолжить."),
     "hint_rearming_motion": ("Keep your face in view to continue.", "Держите лицо в кадре, чтобы продолжить."),
+    "hint_rearming_left": ("Open your left eye to continue.", "Откройте левый глаз, чтобы продолжить."),
+    "hint_rearming_right": ("Open your right eye to continue.", "Откройте правый глаз, чтобы продолжить."),
     "hint_paused": ("Input paused while tracking is unavailable.", "Лицо потеряно или кадры задерживаются. Ввод приостановлен."),
     "safety_jump": ("Face moved suddenly. System control is off.", "Лицо резко сместилось. Управление выключено."),
     "safety_loss": ("Face out of view too long. System control is off.", "Лицо долго не было видно. Управление выключено."),
@@ -103,6 +121,14 @@ MESSAGES = {
     "instruction_wink": ("Wink with one eye, then reopen it.", "Подмигните одним глазом и откройте его."),
     "instruction_motion": ("Move the dot with your nose. Clicks are disabled.", "Двигайте точку носом. Клики отключены."),
     "instruction_dwell": ("Move the pointer, then hold it still to left-click.", "Переместите точку, затем задержитесь для левого клика."),
+    "instruction_dwell_left": (
+        "Keep your left eye open. Move the pointer and hold it still to click.",
+        "Держите левый глаз открытым. Переместите указатель и задержитесь для клика.",
+    ),
+    "instruction_dwell_right": (
+        "Keep your right eye open. Move the pointer and hold it still to click.",
+        "Держите правый глаз открытым. Переместите указатель и задержитесь для клика.",
+    ),
     "right_armed": ("Next click is right. Move to your target.", "Следующий клик — правый. Переместите указатель к цели."),
     "right_cancelled": ("Right click cancelled.", "Правый клик отменён."),
     "gesture_active_left": ("System mouse  ·  Left click", "Системная мышь  ·  Левый клик"),
@@ -155,6 +181,14 @@ MESSAGES = {
     "cli_no_clicks": ("enable pointer motion only", "включить только движение указателя"),
     "cli_dwell": ("start in dwell mode with a 600–5000 ms delay", "открыть режим задержки с интервалом от 600 до 5000 мс"),
     "cli_dwell_invalid": ("Dwell delay must be between 600 and 5000 ms.", "Задержка клика должна быть от 600 до 5000 мс."),
+    "cli_dwell_eye": (
+        "start in dwell mode and require only the chosen eye to stay open",
+        "открыть режим задержки, в котором достаточно держать выбранный глаз открытым",
+    ),
+    "cli_dwell_eye_conflict": (
+        "Choose --dwell-eye for dwell clicks or --no-clicks for motion only.",
+        "Выберите --dwell-eye для кликов по задержке или --no-clicks только для движения.",
+    ),
     "cli_platform": ("System input is supported on Windows.", "Системный ввод поддерживается в Windows."),
     "cli_camera_invalid": ("Camera index must be between 0 and 2147483647.",
                            "Индекс камеры должен быть от 0 до 2147483647."),

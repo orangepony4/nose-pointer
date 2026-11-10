@@ -546,13 +546,20 @@ class PointerApp:
             self.dwell_controls.pack(fill="x", pady=(8, 0))
             if not self.args.no_clicks:
                 self.right_dwell_button.pack(side="right")
-            self.set_message("last_gesture", "instruction_dwell")
+            self.set_message("last_gesture", self.tracking_text_key("instruction_dwell"))
         else:
             self.dwell_controls.pack_forget()
             self.right_dwell_button.pack_forget()
             instruction = "instruction_motion" if self.settings.motion_only or self.args.no_clicks else "instruction_wink"
             self.set_message("last_gesture", instruction)
         self.refresh_right_dwell_button()
+
+    def tracking_text_key(self, key):
+        if self.settings.motion_only:
+            return f"{key}_motion"
+        if self.settings.dwell_seconds is not None and self.settings.dwell_eye is not None:
+            return f"{key}_{self.settings.dwell_eye}"
+        return key
 
     def refresh_right_dwell_button(self):
         armed = self.right_dwell_armed_at is not None
@@ -743,7 +750,7 @@ class PointerApp:
         requested_at = monotonic()
         self.reset_calibration()
         self.calibration_requested_at = requested_at
-        self.set_message("status", "status_recenter_motion" if self.settings.motion_only else "status_recenter")
+        self.set_message("status", self.tracking_text_key("status_recenter"))
 
     def reset_calibration(self):
         self.tracker.reset()
@@ -847,8 +854,8 @@ class PointerApp:
                 self.camera_index_to_save = None
             self.configure_action_button(self.pointer_button, state="normal" if self.can_enable else "disabled")
         hint = f"hint_{result.state}"
-        if self.settings.motion_only and result.state in ("calibrating", "rearming"):
-            hint += "_motion"
+        if result.state in ("calibrating", "rearming"):
+            hint = self.tracking_text_key(hint)
         keys = (self.safety_notice, hint) if self.safety_notice else (hint,)
         fields = {}
         if result.state == "calibrating":
@@ -969,7 +976,12 @@ def load_tracking_settings(args):
     if args.dwell_ms is not None:
         mode, dwell_ms = DWELL_MODE, args.dwell_ms
     else:
-        mode = MOTION_MODE if args.no_clicks else load_text_preference("click-mode")
+        if args.no_clicks:
+            mode = MOTION_MODE
+        elif args.dwell_eye is not None:
+            mode = DWELL_MODE
+        else:
+            mode = load_text_preference("click-mode")
         saved_delay = load_text_preference("dwell-ms")
         dwell_ms = int(saved_delay) if saved_delay.isdecimal() else DEFAULT_DWELL_MS
         if not MIN_DWELL_MS <= dwell_ms <= MAX_DWELL_MS:
@@ -978,7 +990,7 @@ def load_tracking_settings(args):
     settings = Settings(mirror=not args.no_mirror, range_x=range_x, range_y=range_y,
                         dead_zone=dead_zone, wink_min_seconds=args.wink_ms / 1000,
                         dwell_seconds=dwell_ms / 1000 if mode == DWELL_MODE else None,
-                        motion_only=mode == MOTION_MODE)
+                        motion_only=mode == MOTION_MODE, dwell_eye=args.dwell_eye)
     return settings, dwell_ms
 
 
@@ -1005,12 +1017,15 @@ def main(argv=None):
     clicks = parser.add_mutually_exclusive_group()
     clicks.add_argument("--no-clicks", action="store_true", help=text("cli_no_clicks"))
     clicks.add_argument("--dwell-ms", type=int, help=text("cli_dwell"))
+    parser.add_argument("--dwell-eye", choices=("left", "right"), help=text("cli_dwell_eye"))
     args = parser.parse_args(argv)
     if args.lang is None and not (args.download_model or args.check):
         args.lang = load_language()
     language = args.lang or "en"
     if args.dwell_ms is not None and not MIN_DWELL_MS <= args.dwell_ms <= MAX_DWELL_MS:
         parser.error(text("cli_dwell_invalid"))
+    if args.no_clicks and args.dwell_eye is not None:
+        parser.error(text("cli_dwell_eye_conflict"))
     try:
         if args.download_model:
             download_model()

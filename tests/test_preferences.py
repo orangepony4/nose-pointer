@@ -1,3 +1,5 @@
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -75,6 +77,28 @@ class PreferencesTests(unittest.TestCase):
         self.assertTrue(settings.motion_only)
         self.assertIsNone(settings.dwell_seconds)
         self.assertEqual(delay, 800)
+
+    def test_one_eye_dwell_uses_saved_delay_and_stays_transient(self):
+        save_preference("click-mode", MOTION_MODE)
+        save_preference("dwell-ms", 950)
+        stored = {path.name: path.read_bytes() for path in self.directory.iterdir()}
+
+        settings, delay = self.launch("--dwell-eye", "right")
+        self.assertEqual((settings.dwell_eye, settings.dwell_seconds, delay), ("right", 0.95, 950))
+        self.assertFalse(settings.motion_only)
+        settings, delay = self.launch("--dwell-eye", "left", "--dwell-ms", "850")
+        self.assertEqual((settings.dwell_eye, settings.dwell_seconds, delay), ("left", 0.85, 850))
+
+        settings, delay = self.launch()
+        self.assertTrue(settings.motion_only)
+        self.assertEqual((settings.dwell_eye, settings.dwell_seconds, delay), (None, None, 950))
+        self.assertEqual({path.name: path.read_bytes() for path in self.directory.iterdir()}, stored)
+
+    def test_one_eye_dwell_conflicts_with_motion_only(self):
+        with redirect_stderr(StringIO()) as stderr, self.assertRaises(SystemExit) as error:
+            self.launch("--lang", "ru", "--dwell-eye", "left", "--no-clicks")
+        self.assertEqual(error.exception.code, 2)
+        self.assertIn("Выберите --dwell-eye для кликов по задержке", stderr.getvalue())
 
     def test_bad_preference_does_not_hide_other_valid_choices(self):
         save_preference("sensitivity", "sensitivity_low")

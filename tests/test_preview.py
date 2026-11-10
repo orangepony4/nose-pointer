@@ -146,6 +146,23 @@ class PreviewTests(unittest.TestCase):
             self.app.poll()
         self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position, valid_until=ANY)
 
+    def test_unpolled_selected_eye_closure_resets_one_eye_dwell(self):
+        self.select_quick_dwell()
+        self.app.apply_tracking_settings(replace(self.app.settings, dwell_eye="right"))
+        self.arm_system_pointer()
+        target = replace(MOVED_FACE, left_blink=0.95)
+        for now in (0.80, 0.96, 1.12, 1.28):
+            self.feed(now, target)
+        source = self.attach_camera_feed()
+        source.publish(1.36, replace(target, right_blink=0.95))
+        source.publish(1.42, target)
+        self.clock.return_value = 1.42
+        self.app.poll()
+        self.app.poll()
+        self.assertTrue(self.app.active)
+        self.mouse.click.assert_not_called()
+        self.assertEqual(self.app.dwell_bar.configure.call_args.kwargs["value"], 0)
+
     def test_unpolled_nose_displacement_uses_the_calibrated_safety_limit(self):
         self.app.apply_tracking_settings(replace(self.app.settings, max_nose_jump=0.125))
         for nose_x, jumped in ((0.625, False), (0.65625, True)):
@@ -958,6 +975,68 @@ class PreviewTests(unittest.TestCase):
         self.app.click_mode.set(self.app.text(DWELL_MODE))
         self.app.change_click_mode()
         self.assertEqual(self.app.settings.dwell_seconds, 0.8)
+
+    def test_one_eye_dwell_has_bilingual_guidance_and_keeps_emergency_pause(self):
+        self.select_quick_dwell()
+        self.app.apply_tracking_settings(replace(self.app.settings, dwell_eye="left"))
+        neutral = replace(OPEN_FACE, right_blink=0.95)
+        target = replace(MOVED_FACE, right_blink=0.95)
+        self.feed(0.0, neutral)
+        self.assertEqual(self.app.status.get(), self.app.text("hint_calibrating_left", progress=0))
+        self.assertIn("left eye", self.app.last_gesture.get())
+        self.app.language_choice.set("Русский")
+        self.app.change_language()
+        self.assertIn("левый глаз", self.app.status.get())
+        self.assertIn("левый глаз", self.app.last_gesture.get())
+        for now in (0.10, 0.20, 0.31):
+            self.feed(now, neutral)
+        self.assertTrue(self.app.can_enable)
+        self.assert_no_system_input()
+
+        self.app.toggle_pointer()
+        self.assertTrue(self.app.active)
+        self.assertEqual(self.app.status.get(), self.app.text("status_recenter_left"))
+        for now in (0.40, 0.50, 0.60, 0.71):
+            self.feed(now, neutral)
+        for now in (0.80, 0.96, 1.12, 1.28, 1.42):
+            self.feed(now, target)
+        self.mouse.click.assert_called_once_with(
+            "left", expected_position=self.app.last_applied_position, valid_until=ANY,
+        )
+
+        for now in (1.58, 1.74, 1.90, 2.06):
+            self.feed(now, neutral)
+        self.mouse.reset_mock()
+        self.mouse.emergency_requested.return_value = True
+        self.feed(2.20, neutral)
+        self.assertFalse(self.app.active)
+        self.mouse.end_control.assert_called_once_with()
+        self.assert_no_system_input()
+
+    def test_switching_away_from_one_eye_dwell_clears_progress(self):
+        self.select_quick_dwell()
+        self.app.apply_tracking_settings(replace(self.app.settings, dwell_eye="right"))
+        neutral = replace(OPEN_FACE, left_blink=0.95)
+        target = replace(MOVED_FACE, left_blink=0.95)
+        for now in (0.0, 0.10, 0.20, 0.31):
+            self.feed(now, neutral)
+        for now in (0.40, 0.58, 0.76):
+            self.feed(now, target)
+        self.assertGreater(self.app.dwell_bar.configure.call_args.kwargs["value"], 0)
+
+        self.app.click_mode.set(self.app.text(WINK_MODE))
+        self.app.change_click_mode()
+        self.assertIsNone(self.app.settings.dwell_seconds)
+        self.assertEqual(self.app.dwell_bar.configure.call_args.kwargs["value"], 0)
+        self.feed(0.90, neutral)
+        self.assertEqual(self.app.status.get(), self.app.text("hint_calibrating", progress=0))
+        self.assertFalse(self.app.can_enable)
+        self.select_quick_dwell()
+        self.assertEqual(self.app.settings.dwell_eye, "right")
+        self.feed(1.05, target)
+        self.assertEqual(self.app.status.get(), self.app.text("hint_calibrating_right", progress=0))
+        self.assertEqual(self.app.dwell_bar.configure.call_args.kwargs["value"], 0)
+        self.assert_no_system_input()
 
     def test_preview_right_dwell_discards_a_partial_timer_and_requires_fresh_motion(self):
         self.select_quick_dwell()

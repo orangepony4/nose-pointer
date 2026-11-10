@@ -27,7 +27,7 @@ Nose Pointer opens in English on first launch. Use **Language** to switch to **�
 The app remembers the sensitivity preset, click mode and dwell delay you choose. Each launch still starts with the camera and system control off. The command-line options `--range-x`, `--range-y`, `--no-clicks` and `--dwell-ms` override saved choices for that launch.
 
 1. Select **Open camera** (Открыть камеру). The green dot is a practice pointer. Your Windows cursor stays under your usual control.
-2. Look straight ahead while the app calibrates. The status shows calibration progress. Keep both eyes open in the click modes. Try moving the dot, then hold a wink for about a quarter of a second and open the eye. The app shows the recognized click below the practice area.
+2. Look straight ahead while the app calibrates and follow the eye instructions in the status. Try moving the dot. If you use a click mode, try it in the practice area and look for the recognized click below it.
 3. Choose your click mode and sensitivity while still in practice mode. Select **Enable mouse** (Включить мышь) when ready. Calibration uses the current cursor position as its starting point, and the pointer can reach across multiple monitors.
 4. Tap **F8** in Nose Pointer to pause. In another window, hold **F8** briefly. The app checks **F8** again just before moving or clicking. You can also press **Esc** in Nose Pointer, select **Pause** (Пауза), or close the app. **Turn off camera** (Выключить камеру) stops capture.
 
@@ -41,9 +41,19 @@ On shorter windows, scroll the practice area and settings above the camera and m
 
 Use **Click mode** (Режим клика) in practice mode.
 
-- **Wink** (Подмигивание). Wink with the left or right eye and reopen it to send the corresponding click. The pointer holds still during the wink. Blinking both eyes and closing one eye for too short or too long a time produce no click. If the eye stays partly open during the gesture, Nose Pointer measures the closure only up to the start of that reopening.
-- **Dwell** (Задержка курсора). Move to a target and hold the pointer there. The progress bar tracks the delay, which defaults to 1.2 seconds and can be set from 0.6 to 5 seconds. A clear closure of either eye restarts the timer. Move the visible cursor away before the next click. If the cursor reaches a gap between displays, the timer follows its visible position on the display edge. For one right click, select **Right click** (Правый клик), then move to the target and dwell. You can select that button with a regular dwell click when system control is enabled. The next dwell returns to left-click behavior. Select **Cancel** (Отменить) to clear the choice.
+- **Wink** (Подмигивание). Hold a wink for about a quarter of a second, then reopen the eye to send the corresponding click. The pointer holds still during the wink. Blinking both eyes and closing one eye for too short or too long a time produce no click. If the eye stays partly open during the gesture, Nose Pointer measures the closure only up to the start of that reopening.
+- **Dwell** (Задержка курсора). Move to a target and hold the pointer there. The progress bar tracks the delay, which defaults to 1.2 seconds and can be set from 0.6 to 5 seconds. By default, a clear closure of either eye restarts the timer. Move the visible cursor away before the next click. If the cursor reaches a gap between displays, the timer follows its visible position on the display edge. For one right click, select **Right click** (Правый клик), then move to the target and dwell. You can select that button with a regular dwell click when system control is enabled. The next dwell returns to left-click behavior. Select **Cancel** (Отменить) to clear the choice.
 - **Motion only** (Только движение). Use nose movement for the pointer and another device for clicks. This mode uses face position for calibration and steering.
+
+#### Dwell with one eye open
+
+If you usually keep one eye closed, you can start Dwell using the other eye. Open PowerShell in the extracted folder and run the launcher with your choice.
+
+```powershell
+& '.\Start Nose Pointer.cmd' --dwell-eye left
+```
+
+Use `left` for your own left eye or `right` for your own right eye. Keep that eye open during calibration and while moving the pointer. Closing it resets the click timer. The eye choice lasts for this launch. Add `--dwell-ms 1600` to set a different delay from your saved choice.
 
 ### Recalibrate and recover
 
@@ -51,7 +61,7 @@ With system control enabled, tap **F9** in Nose Pointer to recalibrate from the 
 
 When you enable mouse control or request recalibration, the app uses camera frames captured from that moment onward. If you adjust your pose during desktop calibration, keep your final pose briefly as calibration finishes. The current cursor position is the starting point for your next movement.
 
-A short loss of tracking pauses input. The app also checks frame freshness immediately before sending a movement or click and waits for fresh frames if the current one has expired. Keep your face in view and, in the click modes, open both eyes to resume. If another device moved the cursor during the pause, the app recalibrates at that location. After five seconds without an accepted face frame, Nose Pointer returns to practice mode and requires explicit re-enabling. The app also returns to practice if it sees multiple faces, an abrupt jump, or a face reappearing far from its last position. An abrupt jump can stop control even if the face returns to its previous position before the interface refreshes. Keep one person in view. Tracking loss or a pause clears dwell progress and any pending right click.
+A short loss of tracking pauses input. The app also checks frame freshness immediately before sending a movement or click and waits for fresh frames if the current one has expired. Bring your face back into view and follow the eye prompt for your click mode. If another device moved the cursor during the pause, the app recalibrates at that location. After five seconds without an accepted face frame, Nose Pointer returns to practice mode and requires explicit re-enabling. The app also returns to practice if it sees multiple faces, an abrupt jump, or a face reappearing far from its last position. An abrupt jump can stop control even if the face returns to its previous position before the interface refreshes. Keep one person in view. Tracking loss or a pause clears dwell progress and any pending right click.
 
 Enabling mouse control requires a recent preview frame. If the camera feed is delayed, wait for calibration in practice mode and select **Enable mouse** again.
 
@@ -121,7 +131,7 @@ uv run --locked nose_pointer.py
 Приложение запоминает выбранный профиль чувствительности, режим клика и задержку. При каждом запуске камера и системное управление выключены. Параметры командной строки `--range-x`, `--range-y`, `--no-clicks` и `--dwell-ms` имеют приоритет над сохранёнными настройками на время текущего запуска.
 
 1. Нажмите **Открыть камеру**. В режиме пробы зелёная точка движется в окне, а курсор Windows остаётся под вашим обычным управлением.
-2. Смотрите прямо во время калибровки. В строке состояния видно, сколько уже пройдено. В режимах клика держите оба глаза открытыми. Попробуйте подвигать точку, затем подмигните одним глазом примерно на четверть секунды и откройте его. Под тестовым полем появится сторона распознанного клика.
+2. Смотрите прямо во время калибровки и следуйте подсказкам в строке состояния. Попробуйте подвигать точку. Если вы выбрали режим клика, попробуйте его в тестовом поле. Под полем появится распознанный клик.
 3. Подберите режим клика и чувствительность в режиме пробы. Нажмите **Включить мышь**, когда будете готовы. Текущая позиция указателя станет опорной точкой. Управление охватывает и дополнительные мониторы.
 4. Для паузы нажмите **F8** в окне Nose Pointer. В другом окне ненадолго удерживайте **F8**. Приложение проверяет **F8** ещё раз перед движением или кликом. Также можно нажать **Esc** в приложении, выбрать **Паузу** или закрыть окно. Кнопка **Выключить камеру** останавливает захват.
 
@@ -135,9 +145,19 @@ uv run --locked nose_pointer.py
 
 Выберите **Режим клика** в режиме пробы.
 
-- **Подмигивание.** Подмигните левым или правым глазом и откройте его, чтобы выполнить соответствующий клик. Указатель удерживается на месте во время жеста. Моргание двумя глазами, слишком короткое или слишком долгое подмигивание не вызывают клик. Если глаз остаётся приоткрытым во время жеста, Nose Pointer измеряет длительность смыкания век до того момента, когда глаз начал открываться.
-- **Задержка курсора.** Подведите указатель к цели и задержитесь. Полоса показывает ход отсчёта. По умолчанию задержка составляет 1,2 секунды, доступный диапазон от 0,6 до 5 секунд. Если любой из глаз закрывается, отсчёт начинается заново. Для следующего клика сначала отведите видимый указатель. Если указатель упирается в промежуток между экранами, отсчёт учитывает его видимое положение на краю экрана. Для разового правого клика нажмите **Правый клик**, затем переместите указатель к цели и снова задержитесь. При включённой мыши эту кнопку можно нажать обычным кликом по задержке. После правого клика задержка снова даёт левый клик. Кнопка **Отменить** сбрасывает выбор.
+- **Подмигивание.** Закройте один глаз примерно на четверть секунды и откройте его, чтобы выполнить соответствующий клик. Указатель удерживается на месте во время жеста. Моргание двумя глазами, слишком короткое или слишком долгое подмигивание не вызывают клик. Если глаз остаётся приоткрытым во время жеста, Nose Pointer измеряет длительность смыкания век до того момента, когда глаз начал открываться.
+- **Задержка курсора.** Подведите указатель к цели и задержитесь. Полоса показывает ход отсчёта. По умолчанию задержка составляет 1,2 секунды, доступный диапазон от 0,6 до 5 секунд. В обычном режиме закрытие любого глаза сбрасывает отсчёт. Для следующего клика сначала отведите видимый указатель. Если указатель упирается в промежуток между экранами, отсчёт учитывает его видимое положение на краю экрана. Для разового правого клика нажмите **Правый клик**, затем переместите указатель к цели и снова задержитесь. При включённой мыши эту кнопку можно нажать обычным кликом по задержке. После правого клика задержка снова даёт левый клик. Кнопка **Отменить** сбрасывает выбор.
 - **Только движение.** Двигайте указатель носом и используйте другое устройство для кликов. Положение век не влияет на калибровку или движение в этом режиме.
+
+#### Задержка с одним открытым глазом
+
+Если вы обычно держите один глаз закрытым, можно настроить задержку по другому глазу. Откройте PowerShell в распакованной папке и запустите программу с нужным параметром.
+
+```powershell
+& '.\Start Nose Pointer.cmd' --dwell-eye left
+```
+
+Укажите `left` для своего левого глаза или `right` для правого. Держите выбранный глаз открытым при калибровке и движении указателя. Если он закроется, отсчёт клика сбросится. Выбор глаза действует на один запуск. Чтобы задать задержку на этот запуск, добавьте `--dwell-ms 1600`.
 
 ### Калибровка и восстановление управления
 
@@ -145,7 +165,7 @@ uv run --locked nose_pointer.py
 
 После включения управления мышью или запроса повторной калибровки приложение использует кадры, снятые с этого момента. Если сменили позу при калибровке системной мыши, ненадолго задержитесь в новой позе до её завершения. Следующее движение начнётся с текущей позиции указателя.
 
-При краткой потере отслеживания ввод приостанавливается. Приложение также проверяет свежесть кадра непосредственно перед движением или кликом и ждёт новых кадров, если текущий устарел. Верните лицо в кадр и откройте оба глаза, если используете режим клика. Если за время паузы указатель переместили другим устройством, программа откалибруется на новом месте. Через пять секунд без принятого кадра с лицом приложение возвращается в режим пробы. Для возобновления системного ввода снова нажмите **Включить мышь**. Программа также возвращается в режим пробы, если видит несколько лиц, резкое смещение или лицо, которое снова появилось далеко от прежнего положения. Резкое смещение может отключить управление, даже если лицо уже вернулось на прежнее место к следующему обновлению интерфейса. Оставляйте в кадре одного человека. Потеря отслеживания или пауза отменяет отсчёт задержки и выбранный правый клик.
+При краткой потере отслеживания ввод приостанавливается. Приложение также проверяет свежесть кадра непосредственно перед движением или кликом и ждёт новых кадров, если текущий устарел. Верните лицо в кадр и следуйте подсказке для выбранного режима клика. Если за время паузы указатель переместили другим устройством, программа откалибруется на новом месте. Через пять секунд без принятого кадра с лицом приложение возвращается в режим пробы. Для возобновления системного ввода снова нажмите **Включить мышь**. Программа также возвращается в режим пробы, если видит несколько лиц, резкое смещение или лицо, которое снова появилось далеко от прежнего положения. Резкое смещение может отключить управление, даже если лицо уже вернулось на прежнее место к следующему обновлению интерфейса. Оставляйте в кадре одного человека. Потеря отслеживания или пауза отменяет отсчёт задержки и выбранный правый клик.
 
 Для включения мыши нужен свежий кадр из режима пробы. Если кадры задержались, дождитесь калибровки и снова нажмите **Включить мышь**.
 
