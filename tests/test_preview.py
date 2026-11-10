@@ -49,6 +49,7 @@ class PreviewTests(unittest.TestCase):
         self.camera.thread.is_alive.return_value = True
         self.camera.stop_event.is_set.return_value = False
         self.clock = self.enterContext(patch("nose_pointer.monotonic"))
+        self.clock.return_value = 0.0
         self.save_language = self.enterContext(patch("nose_pointer.save_language"))
         self.save_preference = self.enterContext(patch("nose_pointer.save_preference"))
 
@@ -69,7 +70,7 @@ class PreviewTests(unittest.TestCase):
             patch.multiple("nose_pointer.tk", Frame=Mock(), Label=Mock(),
                            Canvas=Mock(side_effect=[workspace, pad]), StringVar=StringValue),
             patch.multiple("nose_pointer.ttk", Style=Mock(), Button=Mock(side_effect=self.buttons),
-                           Combobox=Mock(side_effect=[Mock(), Mock(), Mock(), Mock()]), Progressbar=Mock(),
+                           Combobox=Mock(side_effect=[Mock(), Mock(), Mock(), Mock(), Mock()]), Progressbar=Mock(),
                            Scrollbar=Mock(), Spinbox=Mock()),
         ):
             return PointerApp(self.root, self.mouse, settings,
@@ -290,6 +291,69 @@ class PreviewTests(unittest.TestCase):
         self.app.click_mode.set(self.app.text(DWELL_MODE))
         self.app.dwell_time.set("0.6")
         self.app.change_click_mode()
+
+    def choose_dwell_eye(self, side):
+        picker = self.app.dwell_eye_picker
+        self.app.dwell_eye.set(self.app.text(f"dwell_eye_{side}"))
+        selected = next(binding.args[1] for binding in picker.bind.call_args_list
+                        if binding.args[0] == "<<ComboboxSelected>>")
+        selected(SimpleNamespace(widget=picker))
+
+    def test_gui_eye_choice_clears_pending_dwell_and_uses_fresh_frames(self):
+        self.select_quick_dwell()
+        self.calibrate(0)
+        self.app.toggle_right_dwell()
+        self.feed(0.40)
+        self.feed(0.50, MOVED_FACE)
+        self.feed(0.65, MOVED_FACE)
+        self.assertIsNotNone(self.app.right_dwell_armed_at)
+        self.assertGreater(self.app.dwell_bar.configure.call_args.kwargs["value"], 0)
+        self.save_preference.reset_mock()
+
+        self.clock.return_value = 0.70
+        self.choose_dwell_eye("right")
+        self.assertEqual(self.app.settings.dwell_eye, "right")
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.assertEqual(self.app.dwell_bar.configure.call_args.kwargs["value"], 0)
+        self.assertFalse(self.app.can_enable)
+        self.save_preference.assert_not_called()
+
+        right_open = replace(OPEN_FACE, left_blink=0.95)
+        self.feed(0.68, right_open, wall_time=0.71)
+        for now in (0.72, 0.82, 0.92, 1.00):
+            self.feed(now, right_open)
+        self.assertFalse(self.app.can_enable)
+        self.feed(1.03, right_open)
+        self.assertTrue(self.app.can_enable)
+        self.assert_no_system_input()
+
+    def test_gui_eye_choice_is_locked_while_mouse_control_is_enabled(self):
+        self.select_quick_dwell()
+        self.choose_dwell_eye("left")
+        self.arm_system_pointer()
+        self.app.dwell_eye_picker.configure.assert_called_with(state="disabled")
+        self.choose_dwell_eye("right")
+        self.assertEqual(self.app.settings.dwell_eye, "left")
+        self.assertEqual(self.app.dwell_eye.get(), self.app.text("dwell_eye_left"))
+        self.assertTrue(self.app.tracker.calibrated)
+
+        self.app.pause()
+        self.app.dwell_eye_picker.configure.assert_called_with(state="readonly")
+        self.choose_dwell_eye("both")
+        self.assertIsNone(self.app.settings.dwell_eye)
+        self.assert_no_system_input()
+
+    def test_mode_choice_recalibrates_from_fresh_frames(self):
+        self.calibrate(0)
+        self.clock.return_value = 0.40
+        self.select_quick_dwell()
+        self.feed(0.39, wall_time=0.41)
+        for now in (0.42, 0.52, 0.62, 0.70):
+            self.feed(now)
+        self.assertFalse(self.app.can_enable)
+        self.feed(0.73)
+        self.assertTrue(self.app.can_enable)
+        self.assert_no_system_input()
 
     def test_settings_choosers_save_only_the_value_explicitly_changed(self):
         self.app.sensitivity.set(self.app.text("sensitivity_high"))
@@ -1647,6 +1711,7 @@ class PreviewTests(unittest.TestCase):
         }
         for mode, samples in scenarios.items():
             with self.subTest(mode=mode):
+                self.clock.return_value = 0.0
                 if mode == DWELL_MODE:
                     self.select_quick_dwell()
                 else:
@@ -1674,6 +1739,7 @@ class PreviewTests(unittest.TestCase):
         for mode, (action, preparation, (captured_at, sample)) in scenarios.items():
             with self.subTest(mode=mode):
                 self.app.disable_input()
+                self.clock.return_value = 0.0
                 if mode == DWELL_MODE:
                     self.select_quick_dwell()
                 else:

@@ -1,0 +1,89 @@
+from types import SimpleNamespace
+import sys
+import tkinter as tk
+import unittest
+from unittest.mock import Mock, call, patch
+
+from nose_pointer import DWELL_MODE, WINK_MODE, PointerApp
+from tracking import FaceSample, Settings
+
+
+@unittest.skipUnless(sys.platform == "win32", "Checks Windows Tk widgets")
+class DwellEyeWidgetTests(unittest.TestCase):
+    def setUp(self):
+        self.clock = self.enterContext(patch("nose_pointer.monotonic", return_value=0.0))
+        self.save_preference = self.enterContext(patch("nose_pointer.save_preference"))
+        self.enterContext(patch("nose_pointer.save_language"))
+
+    def open_app(self, settings, *, no_clicks=False):
+        try:
+            root = tk.Tk()
+        except tk.TclError as error:
+            self.skipTest(f"No Tk display: {error}")
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        mouse = Mock()
+        mouse.emergency_requested.return_value = False
+        mouse.recenter_requested.return_value = False
+        args = SimpleNamespace(camera=0, lang="en", no_clicks=no_clicks, swap_buttons=False)
+        with patch.object(tk.Misc, "focus_set"), patch.object(PointerApp, "poll"):
+            app = PointerApp(root, mouse, settings, args)
+        root.update_idletasks()
+        return app, mouse
+
+    def choose(self, picker, index):
+        picker.current(index)
+        picker.event_generate("<<ComboboxSelected>>", when="now")
+
+    def test_eye_picker_localizes_cli_choice_and_locks_during_mouse_control(self):
+        app, mouse = self.open_app(Settings(calibration_seconds=0, dwell_seconds=0.6, dwell_eye="right"))
+        picker = app.dwell_eye_picker
+        self.assertEqual(picker.cget("values"), ("Both eyes", "Left eye", "Right eye"))
+        self.assertEqual(picker.current(), 2)
+        self.assertEqual(app.dwell_controls.winfo_manager(), "pack")
+
+        self.choose(app.language_picker, 1)
+        self.assertEqual(picker.cget("values"), ("Оба глаза", "Левый глаз", "Правый глаз"))
+        self.assertEqual(picker.get(), "Правый глаз")
+        self.choose(picker, 1)
+        self.assertEqual(app.settings.dwell_eye, "left")
+        self.save_preference.assert_not_called()
+
+        app.update_tracking(0.1, FaceSample(0.5, 0.5, 0.1, 0.95))
+        self.clock.return_value = 0.1
+        app.toggle_pointer()
+        self.assertTrue(app.active)
+        self.assertTrue(picker.instate(["disabled"]))
+        self.choose(picker, 0)
+        self.assertEqual(picker.current(), 1)
+        self.assertEqual(app.settings.dwell_eye, "left")
+        app.pause()
+        self.assertTrue(picker.instate(["readonly", "!disabled"]))
+        self.choose(picker, 0)
+        self.assertIsNone(app.settings.dwell_eye)
+
+        self.choose(app.mode_picker, 0)
+        self.assertEqual(app.dwell_controls.winfo_manager(), "")
+        self.choose(app.mode_picker, 1)
+        self.assertEqual(app.dwell_controls.winfo_manager(), "pack")
+        self.assertEqual(picker.get(), "Оба глаза")
+        self.assertEqual(self.save_preference.call_args_list, [call("click-mode", WINK_MODE), call("click-mode", DWELL_MODE)])
+        self.assertEqual(app.root.state(), "withdrawn")
+        self.assertFalse(app.root.winfo_viewable())
+        mouse.move.assert_not_called()
+        mouse.click.assert_not_called()
+
+    def test_motion_only_lock_keeps_eye_picker_hidden_and_disabled(self):
+        app, mouse = self.open_app(Settings(motion_only=True), no_clicks=True)
+        self.assertEqual(app.dwell_controls.winfo_manager(), "")
+        self.assertTrue(app.dwell_eye_picker.instate(["disabled"]))
+        self.choose(app.dwell_eye_picker, 2)
+        self.assertIsNone(app.settings.dwell_eye)
+        self.assertEqual(app.dwell_eye_picker.current(), 0)
+        self.assertFalse(app.root.winfo_viewable())
+        self.save_preference.assert_not_called()
+        self.assertEqual(mouse.mock_calls, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

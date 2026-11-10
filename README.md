@@ -47,13 +47,15 @@ Use **Click mode** (Режим клика) in practice mode.
 
 #### Dwell with one eye open
 
-If you usually keep one eye closed, you can start Dwell using the other eye in version 0.11.0 or newer. Open PowerShell in the extracted folder and run the launcher with your choice.
+In practice mode, choose **Dwell** under **Click mode**. Use **Eye for dwell** to select **Left eye**, **Right eye**, or **Both eyes**. Left and right mean your own eyes. Keep the selected eye open during calibration and while moving the pointer. Closing it resets the click timer. Changing the eye choice cancels pending clicks and starts a fresh calibration. The choice lasts until you close the app.
+
+Version 0.11.0 or newer also lets you start Dwell with one eye selected. Open PowerShell in the extracted folder and run the launcher with your choice.
 
 ```powershell
 & '.\Start Nose Pointer.cmd' --dwell-eye left
 ```
 
-Use `left` for your own left eye or `right` for your own right eye. Keep that eye open during calibration and while moving the pointer. Closing it resets the click timer. The eye choice lasts for this launch. Add `--dwell-ms 1600` to set a different delay from your saved choice.
+Use `left` or `right`. Add `--dwell-ms 1600` to set a different delay from your saved choice.
 
 ### Recalibrate and recover
 
@@ -151,13 +153,15 @@ uv run --locked nose_pointer.py
 
 #### Задержка с одним открытым глазом
 
-Если вы обычно держите один глаз закрытым, в версии 0.11.0 или новее можно настроить задержку по другому глазу. Откройте PowerShell в распакованной папке и запустите программу с нужным параметром.
+В режиме пробы выберите **Задержка курсора** в списке **Режим клика**. В списке **Глаз для задержки** доступны **Левый глаз**, **Правый глаз** и **Оба глаза**. Левая и правая стороны указаны с вашей точки зрения. Держите выбранный глаз открытым при калибровке и движении указателя. Если он закроется, отсчёт клика сбросится. Смена глаза отменяет ожидающие клики и запускает калибровку заново. Выбор действует до закрытия программы.
+
+Начиная с версии 0.11.0, можно сразу запустить задержку с выбранным глазом. Откройте PowerShell в распакованной папке и запустите программу с нужным параметром.
 
 ```powershell
 & '.\Start Nose Pointer.cmd' --dwell-eye left
 ```
 
-Укажите `left` для своего левого глаза или `right` для правого. Держите выбранный глаз открытым при калибровке и движении указателя. Если он закроется, отсчёт клика сбросится. Выбор глаза действует на один запуск. Чтобы задать задержку на этот запуск, добавьте `--dwell-ms 1600`.
+Укажите `left` или `right`. Чтобы задать задержку на этот запуск, добавьте `--dwell-ms 1600`.
 
 ### Калибровка и восстановление управления
 

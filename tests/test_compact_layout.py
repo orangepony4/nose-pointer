@@ -85,6 +85,7 @@ class CompactLayoutTests(unittest.TestCase):
         self.assertEqual(app.camera_button.cget("text"), app.text("open_camera"))
         self.assertGreater(app.pad.winfo_height(), app.pad.winfo_reqheight())
         self.assert_widget_fits(app.delay_picker, app.workspace)
+        self.assert_widget_fits(app.dwell_eye_picker, app.workspace)
         self.assert_widget_fits(app.pointer_button, app.root)
         self.assertEqual(mouse.mock_calls, [])
 
@@ -118,7 +119,7 @@ class CompactLayoutTests(unittest.TestCase):
                         app.camera_button.focus_force()
                         root.update()
                         visited = set()
-                        for _ in range(10):
+                        for _ in range(11):
                             root.focus_get().event_generate("<KeyPress-Tab>")
                             root.update()
                             focused = root.focus_get()
@@ -127,7 +128,8 @@ class CompactLayoutTests(unittest.TestCase):
                             if focused is app.camera_button:
                                 break
                         self.assertTrue({app.language_picker, app.sensitivity_picker, app.mode_picker,
-                                         app.delay_picker, app.right_dwell_button, app.pointer_button} <= visited)
+                                         app.delay_picker, app.right_dwell_button, app.dwell_eye_picker,
+                                         app.pointer_button} <= visited)
 
                         with patch("nose_pointer.monotonic", return_value=1.1):
                             app.pointer_button.invoke()
@@ -141,7 +143,7 @@ class CompactLayoutTests(unittest.TestCase):
                         self.assert_widget_fits(app.footer_notice_label, root)
                         for widget in fixed_actions:
                             self.assert_widget_fits(widget, root)
-                        for widget in (app.language_picker, app.mode_picker, app.delay_picker):
+                        for widget in (app.language_picker, app.mode_picker, app.delay_picker, app.dwell_eye_picker):
                             widget.focus_force()
                             root.update()
                             self.assert_widget_fits(widget, app.workspace)

@@ -27,6 +27,7 @@ WINK_MODE = "wink"
 DWELL_MODE = "dwell"
 MOTION_MODE = "motion"
 CLICK_MODES = (WINK_MODE, DWELL_MODE, MOTION_MODE)
+DWELL_EYES = {"dwell_eye_both": None, "dwell_eye_left": "left", "dwell_eye_right": "right"}
 SENSITIVITY_PRESETS = {
     "sensitivity_low": (0.18, 0.15, Settings.dead_zone),
     "sensitivity_standard": (Settings.range_x, Settings.range_y, Settings.dead_zone),
@@ -210,6 +211,16 @@ class PointerApp:
         self.delay_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
         self.dwell_bar = ttk.Progressbar(dwell_actions, length=65, maximum=100, mode="determinate")
         self.dwell_bar.pack(side="left", fill="x", expand=True, padx=(12, 9))
+        dwell_eye_row = tk.Frame(self.dwell_controls, bg=BACKGROUND)
+        dwell_eye_row.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(7, 0))
+        dwell_eye_label = self.make_label(dwell_eye_row, "dwell_eye", font=("Segoe UI", 10), fg=INK)
+        self.dwell_eye = tk.StringVar(value=self.dwell_eye_text())
+        self.dwell_eye_picker = ttk.Combobox(
+            dwell_eye_row, textvariable=self.dwell_eye, values=self.choice_labels(DWELL_EYES), width=12,
+            state="disabled" if args.no_clicks else "readonly",
+        )
+        self.layout_choice(dwell_eye_row, dwell_eye_label, self.dwell_eye_picker)
+        self.dwell_eye_picker.bind("<<ComboboxSelected>>", self.change_dwell_eye)
 
         footer = tk.Frame(shell, bg=BACKGROUND)
         footer.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
@@ -268,7 +279,7 @@ class PointerApp:
         root.bind("<Next>", lambda _event: self.scroll_workspace(1, "pages"))
         # In a scrolling workspace, a wheel over a picker should scroll the view.
         for picker in (self.language_picker, self.sensitivity_picker, self.mode_picker,
-                       self.delay_picker, self.camera_picker):
+                       self.delay_picker, self.dwell_eye_picker, self.camera_picker):
             picker.bind("<MouseWheel>", self.scroll_workspace_wheel, add="+")
             for key in BUTTON_ACTION_KEYS:
                 picker.bind(f"<KeyPress-{key}>", self.remember_other_button_key, add="+")
@@ -513,6 +524,9 @@ class PointerApp:
     def delay_choices(self):
         return {dwell_label(delay, self.language): delay for delay in self.dwell_presets}
 
+    def dwell_eye_text(self):
+        return self.text(f"dwell_eye_{self.settings.dwell_eye or 'both'}")
+
     def change_language(self, _event=None):
         language = next((key for key, label in LANGUAGES.items() if label == self.language_choice.get()), None)
         if self.active or language is None:
@@ -528,6 +542,8 @@ class PointerApp:
         self.dwell_durations = self.delay_choices()
         self.dwell_time.set(dwell_label(delay, self.language))
         self.delay_picker.configure(values=tuple(self.dwell_durations))
+        self.dwell_eye.set(self.dwell_eye_text())
+        self.dwell_eye_picker.configure(values=self.choice_labels(DWELL_EYES))
         self.sensitivity.set(self.text(preset))
         self.sensitivity_picker.configure(values=self.choice_labels(self.sensitivity_presets))
         self.click_mode.set(self.text(self.selected_click_mode()))
@@ -607,12 +623,21 @@ class PointerApp:
         motion_only = mode == MOTION_MODE
         delay = self.dwell_durations[self.dwell_time.get()] if mode == DWELL_MODE else None
         dwell_seconds = delay / 1000 if delay is not None else None
-        self.apply_tracking_settings(replace(self.settings, dwell_seconds=dwell_seconds, motion_only=motion_only))
+        self.apply_tracking_settings(
+            replace(self.settings, dwell_seconds=dwell_seconds, motion_only=motion_only), require_fresh_frames=True,
+        )
         if event is not None and event.widget is self.delay_picker:
             if delay is not None:
                 save_preference("dwell-ms", delay)
         else:
             save_preference("click-mode", mode)
+
+    def change_dwell_eye(self, _event=None):
+        choice = self.choice_key(self.dwell_eye, DWELL_EYES)
+        if self.active or self.args.no_clicks or self.settings.dwell_seconds is None or choice is None:
+            self.dwell_eye.set(self.dwell_eye_text())
+            return
+        self.apply_tracking_settings(replace(self.settings, dwell_eye=DWELL_EYES[choice]), require_fresh_frames=True)
 
     def change_sensitivity(self, _event=None):
         if self.active:
@@ -625,12 +650,15 @@ class PointerApp:
         if preset in SENSITIVITY_PRESETS:
             save_preference("sensitivity", preset)
 
-    def apply_tracking_settings(self, settings):
+    def apply_tracking_settings(self, settings, *, require_fresh_frames=False):
         if settings == self.settings:
             return
+        requested_at = monotonic() if require_fresh_frames else None
         self.settings = settings
         self.tracker = Tracker(settings)
         self.reset_calibration()
+        self.calibration_requested_at = requested_at
+        self.dwell_eye.set(self.dwell_eye_text())
         self.position = (0.5, 0.5)
         self.draw_pad()
         self.configure_action_button(self.pointer_button, state="disabled")
@@ -730,6 +758,7 @@ class PointerApp:
             self.sensitivity_picker.configure(state="disabled")
             self.mode_picker.configure(state="disabled")
             self.delay_picker.configure(state="disabled")
+            self.dwell_eye_picker.configure(state="disabled")
             self.set_message("mode", "mode_active")
             self.set_button("pointer_button", "pause")
             self.recenter()
@@ -783,6 +812,7 @@ class PointerApp:
         self.sensitivity_picker.configure(state="readonly")
         self.mode_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
         self.delay_picker.configure(state="readonly")
+        self.dwell_eye_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
         self.set_button("pointer_button", "enable_mouse", state="disabled")
 
     def reset_to_preview(self, message):
