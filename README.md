@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.10.1)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.1.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.1)
+**[Download the Windows ZIP (v0.10.2)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.2.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.2)
 
 ## English
 
@@ -42,7 +42,7 @@ On shorter windows, scroll the practice area and settings above the camera and m
 Use **Click mode** (Режим клика) in practice mode.
 
 - **Wink** (Подмигивание). Wink with the left or right eye and reopen it to send the corresponding click. The pointer holds still during the wink. Blinking both eyes and closing one eye for too short or too long a time produce no click. If the eye stays partly open during the gesture, Nose Pointer measures the closure only up to the start of that reopening.
-- **Dwell** (Задержка курсора). Move to a target and hold the pointer there. The progress bar tracks the delay, which defaults to 1.2 seconds and can be set from 0.6 to 5 seconds. Move the visible cursor away before the next click. If the cursor reaches a gap between displays, the timer follows its visible position on the display edge. For one right click, select **Right click** (Правый клик), then move to the target and dwell. You can select that button with a regular dwell click when system control is enabled. The next dwell returns to left-click behavior. Select **Cancel** (Отменить) to clear the choice.
+- **Dwell** (Задержка курсора). Move to a target and hold the pointer there. The progress bar tracks the delay, which defaults to 1.2 seconds and can be set from 0.6 to 5 seconds. A clear closure of either eye restarts the timer. Move the visible cursor away before the next click. If the cursor reaches a gap between displays, the timer follows its visible position on the display edge. For one right click, select **Right click** (Правый клик), then move to the target and dwell. You can select that button with a regular dwell click when system control is enabled. The next dwell returns to left-click behavior. Select **Cancel** (Отменить) to clear the choice.
 - **Motion only** (Только движение). Use nose movement for the pointer and another device for clicks. This mode uses face position for calibration and steering.
 
 ### Recalibrate and recover
@@ -100,7 +100,7 @@ See the [MIT license](LICENSE).
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.10.1)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.1.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.1)
+**[Скачать ZIP для Windows (v0.10.2)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.2.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.2)
 
 ### Запуск на Windows
 
@@ -136,7 +136,7 @@ uv run --locked nose_pointer.py
 Выберите **Режим клика** в режиме пробы.
 
 - **Подмигивание.** Подмигните левым или правым глазом и откройте его, чтобы выполнить соответствующий клик. Указатель удерживается на месте во время жеста. Моргание двумя глазами, слишком короткое или слишком долгое подмигивание не вызывают клик. Если глаз остаётся приоткрытым во время жеста, Nose Pointer измеряет длительность смыкания век до того момента, когда глаз начал открываться.
-- **Задержка курсора.** Подведите указатель к цели и задержитесь. Полоса показывает ход отсчёта. По умолчанию задержка составляет 1,2 секунды, доступный диапазон от 0,6 до 5 секунд. Для следующего клика сначала отведите видимый указатель. Если указатель упирается в промежуток между экранами, отсчёт учитывает его видимое положение на краю экрана. Для разового правого клика нажмите **Правый клик**, затем переместите указатель к цели и снова задержитесь. При включённой мыши эту кнопку можно нажать обычным кликом по задержке. После правого клика задержка снова даёт левый клик. Кнопка **Отменить** сбрасывает выбор.
+- **Задержка курсора.** Подведите указатель к цели и задержитесь. Полоса показывает ход отсчёта. По умолчанию задержка составляет 1,2 секунды, доступный диапазон от 0,6 до 5 секунд. Если любой из глаз закрывается, отсчёт начинается заново. Для следующего клика сначала отведите видимый указатель. Если указатель упирается в промежуток между экранами, отсчёт учитывает его видимое положение на краю экрана. Для разового правого клика нажмите **Правый клик**, затем переместите указатель к цели и снова задержитесь. При включённой мыши эту кнопку можно нажать обычным кликом по задержке. После правого клика задержка снова даёт левый клик. Кнопка **Отменить** сбрасывает выбор.
 - **Только движение.** Двигайте указатель носом и используйте другое устройство для кликов. Положение век не влияет на калибровку или движение в этом режиме.
 
 ### Калибровка и восстановление управления

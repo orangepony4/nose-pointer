@@ -886,7 +886,9 @@ class PointerApp:
             else:
                 self.recenter_held = False
         if self.camera:
-            latest, error = self.camera.snapshot()
+            latest, error = self.camera.snapshot(
+                interrupts_gesture=self.tracker.interrupts_pending_click, after_capture_at=self.last_frame,
+            )
             now = monotonic()
             if (self.active and self.last_active_face_at is not None
                     and now >= self.last_active_face_at + FACE_LOSS_GRACE_SECONDS):

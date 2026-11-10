@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -383,6 +384,47 @@ class CameraTests(unittest.TestCase):
         camera.publish(0.4, FACE)
         self.assertEqual(camera.snapshot(), ((0.2, AMBIGUOUS_FACE), None))
         self.assertEqual(camera.snapshot(), ((0.4, FACE), None))
+
+    def test_eye_interruption_is_fresh_and_consumed_once_before_the_latest_sample(self):
+        camera = Camera(0)
+        blink = replace(FACE, right_blink=0.9)
+
+        def interrupts(sample):
+            return sample.right_blink > 0.3
+
+        camera.publish(0.1, blink)
+        camera.publish(0.2, FACE)
+        self.assertEqual(camera.snapshot(interrupts_gesture=interrupts, after_capture_at=0.1), ((0.2, FACE), None))
+        self.assertEqual(camera.snapshot(interrupts_gesture=interrupts), ((0.2, FACE), None))
+
+        camera.publish(0.3, blink)
+        camera.publish(0.4, FACE)
+        self.assertEqual(camera.snapshot(interrupts_gesture=interrupts, after_capture_at=0.2), ((0.3, blink), None))
+        self.assertEqual(camera.snapshot(interrupts_gesture=interrupts), ((0.4, FACE), None))
+
+        camera.publish(0.5, blink)
+        weaker_blink = replace(blink, right_blink=0.8)
+        camera.publish(0.6, weaker_blink)
+        self.assertEqual(camera.snapshot(interrupts_gesture=interrupts), ((0.6, weaker_blink), None))
+
+    def test_invalid_sample_and_ambiguity_take_priority_over_a_queued_eye_interruption(self):
+        blink = replace(FACE, right_blink=0.9)
+        invalid = replace(FACE, nose_x=float("nan"))
+
+        def interrupts(sample):
+            return sample.right_blink > 0.3
+
+        for pause in (None, AMBIGUOUS_FACE):
+            with self.subTest(pause=pause):
+                camera = Camera(0)
+                camera.publish(0.1, invalid)
+                if pause is AMBIGUOUS_FACE:
+                    camera.publish(0.2, AMBIGUOUS_FACE)
+                camera.publish(0.3, blink)
+                camera.publish(0.4, FACE)
+                paused_at = 0.2 if pause is AMBIGUOUS_FACE else 0.1
+                self.assertEqual(camera.snapshot(interrupts_gesture=interrupts), ((paused_at, pause), None))
+                self.assertEqual(camera.snapshot(interrupts_gesture=interrupts), ((0.4, FACE), None))
 
 
 if __name__ == "__main__":

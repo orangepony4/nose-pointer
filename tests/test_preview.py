@@ -95,6 +95,112 @@ class PreviewTests(unittest.TestCase):
         self.mouse.move.assert_not_called()
         self.mouse.click.assert_not_called()
 
+    def attach_camera_feed(self):
+        source = camera.Camera(0)
+        source.thread = Mock()
+        source.thread.is_alive.return_value = True
+        self.app.camera = source
+        return source
+
+    def test_unpolled_opposite_eye_interrupts_a_pending_wink(self):
+        right_wink = replace(LEFT_WINK, left_blink=0.1, right_blink=0.9)
+        for wink, interrupted in (
+            (LEFT_WINK, replace(LEFT_WINK, right_blink=0.9)),
+            (right_wink, replace(right_wink, left_blink=0.25)),
+        ):
+            with self.subTest(wink=wink):
+                self.app.disable_input()
+                self.app.camera = self.camera
+                self.app.apply_tracking_settings(replace(self.app.settings, open_threshold=0.20))
+                self.arm_system_pointer()
+                self.feed(0.80, wink)
+                self.feed(0.92, wink)
+                source = self.attach_camera_feed()
+                source.publish(0.98, interrupted)
+                source.publish(1.08, OPEN_FACE)
+                self.clock.return_value = 1.08
+                self.app.poll()
+                self.app.poll()
+                self.assertTrue(self.app.active)
+                self.assert_no_system_input()
+
+    def test_unpolled_eye_closure_resets_dwell_progress(self):
+        self.select_quick_dwell()
+        self.app.apply_tracking_settings(replace(self.app.settings, closed_threshold=0.60))
+        self.arm_system_pointer()
+        for now in (0.80, 0.96, 1.12, 1.28):
+            self.feed(now, MOVED_FACE)
+        source = self.attach_camera_feed()
+        source.publish(1.36, replace(MOVED_FACE, right_blink=0.60))
+        source.publish(1.42, MOVED_FACE)
+        self.clock.return_value = 1.42
+        self.app.poll()
+        self.app.poll()
+        self.assertTrue(self.app.active)
+        self.mouse.click.assert_not_called()
+        self.assertEqual(self.app.dwell_bar.configure.call_args.kwargs["value"], 0)
+
+        for now in (1.58, 1.74, 1.90, 2.06, 2.20):
+            source.publish(now, MOVED_FACE)
+            self.clock.return_value = now
+            self.app.poll()
+        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
+
+    def test_motion_only_uses_the_latest_frame_when_unpolled_eyes_close(self):
+        self.app.click_mode.set(self.app.text(MOTION_MODE))
+        self.app.change_click_mode()
+        self.arm_system_pointer()
+        source = self.attach_camera_feed()
+        source.publish(0.80, replace(OPEN_FACE, nose_x=0.45, left_blink=0.9, right_blink=0.9))
+        source.publish(0.92, MOVED_FACE)
+        self.clock.return_value = 0.92
+        self.app.poll()
+        self.app.poll()
+        self.assertTrue(self.app.active)
+        self.assertEqual(self.app.last_frame, 0.92)
+        self.mouse.move.assert_called_once()
+        self.mouse.click.assert_not_called()
+
+    def test_recenter_discards_queued_blink_evidence_before_a_new_wink(self):
+        self.arm_system_pointer()
+        self.feed(0.80, LEFT_WINK)
+        self.feed(0.92, LEFT_WINK)
+        source = self.attach_camera_feed()
+        source.publish(0.98, replace(LEFT_WINK, right_blink=0.9))
+        source.publish(1.08, OPEN_FACE)
+        self.clock.return_value = 1.08
+        self.mouse.recenter_requested.return_value = True
+        self.app.poll()
+        self.mouse.recenter_requested.return_value = False
+        self.assertEqual(self.app.last_frame, 1.08)
+        self.assert_no_system_input()
+
+        for now, sample in ((1.20, OPEN_FACE), (1.31, OPEN_FACE), (1.40, OPEN_FACE),
+                            (1.48, LEFT_WINK), (1.60, LEFT_WINK), (1.72, OPEN_FACE)):
+            source.publish(now, sample)
+            self.clock.return_value = now
+            self.app.poll()
+        self.assertTrue(self.app.active)
+        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
+
+    def test_stopping_camera_discards_queued_blink_evidence(self):
+        self.arm_system_pointer()
+        self.feed(0.80, LEFT_WINK)
+        self.feed(0.92, LEFT_WINK)
+        source = self.attach_camera_feed()
+        source.publish(0.98, replace(LEFT_WINK, right_blink=0.9))
+        source.publish(1.08, OPEN_FACE)
+        self.app.toggle_camera()
+        self.assertTrue(source.stop_event.is_set())
+        source.thread.is_alive.return_value = False
+        self.clock.return_value = 1.08
+        self.app.poll()
+        self.assertFalse(self.app.active)
+        self.assertIsNone(self.app.camera)
+        self.assert_no_system_input()
+        self.assertEqual(source.snapshot(interrupts_gesture=lambda sample: sample.right_blink > 0.3),
+                         ((1.08, OPEN_FACE), None))
+
     def test_unpolled_invalid_camera_sample_cancels_wink_before_reopen(self):
         self.arm_system_pointer()
         self.feed(0.8, LEFT_WINK)

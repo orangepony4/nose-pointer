@@ -119,6 +119,12 @@ class Tracker:
         self._dwell_armed = False
         self._dwell_candidate: tuple[tuple[float, float], float] | None = None
 
+    def interrupts_pending_click(self, sample: FaceSample) -> bool:
+        """Whether this eye observation interrupts an in-progress click gesture."""
+        if self._wink is not None:
+            return not self._other_eye_open(self._wink, sample)
+        return self._dwell_candidate is not None and not self._dwell_eyes_open(sample)
+
     def _break_continuity(self) -> None:
         self._calibration_start: float | None = None
         self._calibration_count = 0
@@ -183,7 +189,7 @@ class Tracker:
         dwell_seconds = self.settings.dwell_seconds
         if dwell_seconds is not None:
             # Dwell needs no wink gesture. Only a clear closure interrupts it.
-            eyes_open = max(sample.left_blink, sample.right_blink) < self.settings.closed_threshold
+            eyes_open = self._dwell_eyes_open(sample)
 
         if not self.calibrated:
             return self._calibrate(now, sample, eyes_open, calibration_position)
@@ -263,16 +269,18 @@ class Tracker:
         self._armed = True
         return TrackingOutput(self._position, None, "tracking", 1.0)
 
+    def _dwell_eyes_open(self, sample: FaceSample) -> bool:
+        return max(sample.left_blink, sample.right_blink) < self.settings.closed_threshold
+
+    def _other_eye_open(self, side: Click, sample: FaceSample) -> bool:
+        other_score = sample.right_blink if side == "left" else sample.left_blink
+        return other_score <= self.settings.open_threshold
+
     def _continue_wink(
         self, side: Click, now: float, sample: FaceSample, eyes_open: bool
     ) -> TrackingOutput:
         settings = self.settings
-        if side == "left":
-            wink_score, other_score = sample.left_blink, sample.right_blink
-        else:
-            wink_score, other_score = sample.right_blink, sample.left_blink
-
-        if now > self._wink_start + settings.wink_max_seconds or other_score > settings.open_threshold:
+        if now > self._wink_start + settings.wink_max_seconds or not self._other_eye_open(side, sample):
             self._break_continuity()
             if eyes_open:
                 self._open_since = now
@@ -292,6 +300,7 @@ class Tracker:
         # reopening is confirmed, a new closure cannot extend the old one.
         if self._wink_reopening_confirmed:
             return self._hold("wink")
+        wink_score = sample.left_blink if side == "left" else sample.right_blink
         if wink_score >= settings.closed_threshold:
             if now > self._wink_start:
                 self._wink_seen_again = True

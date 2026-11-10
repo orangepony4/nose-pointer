@@ -111,6 +111,7 @@ class Camera:
         self.lock = Lock()
         self.latest = None
         self.pending_pause = None
+        self._unread_blink_peaks = (None, None)
         self.error = None
         self.thread = Thread(target=self.run, name="webcam", daemon=True)
 
@@ -120,11 +121,24 @@ class Camera:
     def stop(self):
         self.stop_event.set()
 
-    def snapshot(self):
+    def snapshot(self, *, interrupts_gesture=None, after_capture_at=None):
+        """Read the latest frame or a fresh tracking or gesture interruption."""
         with self.lock:
+            peaks, self._unread_blink_peaks = self._unread_blink_peaks, (None, None)
             if self.pending_pause is not None:
                 pause, self.pending_pause = self.pending_pause, None
                 return pause, self.error
+            if interrupts_gesture is not None and self.latest is not None:
+                _, sample = self.latest
+                if isinstance(sample, FaceSample) and not interrupts_gesture(sample):
+                    interruption = max(
+                        (peak for peak in peaks if peak is not None
+                         and (after_capture_at is None or peak[0] > after_capture_at)
+                         and interrupts_gesture(peak[1])),
+                        key=lambda observation: observation[0], default=None,
+                    )
+                    if interruption is not None:
+                        return interruption, self.error
             return self.latest, self.error
 
     def publish(self, captured_at, sample):
@@ -136,6 +150,14 @@ class Camera:
             # disables input, so it takes precedence over a missing face.
             if sample is AMBIGUOUS_FACE or (sample is None and self.pending_pause is None):
                 self.pending_pause = self.latest
+            elif isinstance(sample, FaceSample):
+                # Two samples are enough to keep the strongest evidence for each eye.
+                left, right = self._unread_blink_peaks
+                if left is None or sample.left_blink >= left[1].left_blink:
+                    left = self.latest
+                if right is None or sample.right_blink >= right[1].right_blink:
+                    right = self.latest
+                self._unread_blink_peaks = left, right
 
     def run(self):
         try:
