@@ -50,6 +50,15 @@ def dwell_label(milliseconds, language):
     return value.replace(".", ",") if language == "ru" else value
 
 
+def parse_camera_index(value: str) -> int | None:
+    value = value.strip()
+    if 0 < len(value) <= 10 and value.isascii() and value.isdecimal():
+        index = int(value)
+        if index <= MAX_CAMERA_INDEX:
+            return index
+    return None
+
+
 class PointerApp:
     def __init__(self, root, mouse, settings, args, *, initial_dwell_ms=DEFAULT_DWELL_MS):
         self.root = root
@@ -62,6 +71,8 @@ class PointerApp:
         self.button_labels = {"camera_button": "open_camera", "pointer_button": "enable_mouse"}
         self.tracker = Tracker(settings)
         self.camera = None
+        self.last_camera_index = args.camera
+        self.camera_index_to_save: int | None = None
         self.active = False
         self.recenter_held = False
         self.last_frame = None
@@ -72,6 +83,7 @@ class PointerApp:
         self.recovery_pending = False
         self.right_dwell_armed_at: float | None = None
         self.button_key_presses = {}
+        self.unfocused_button_keys: tuple[str, ...] = ()
         self.feed_stale = False
         self.can_enable = False
         self.safety_notice = ""
@@ -231,6 +243,7 @@ class PointerApp:
                 button.bind(f"<KeyPress-{key}>", self.press_button_key)
                 button.bind(f"<KeyRelease-{key}>", self.release_button_key)
         root.bind("<FocusOut>", self.cancel_button_key, add="+")
+        root.bind("<FocusIn>", self.restore_button_key_focus, add="+")
         self.show_click_instructions()
         self.hotkey_label = self.make_label(footer, "hotkeys", font=("Segoe UI", 10, "bold"), fg=INK,
                                             anchor="w", justify="left", wraplength=430)
@@ -296,11 +309,20 @@ class PointerApp:
                 if press is not None and press[0] is event.widget:
                     # Keep the key held until release so repeats cannot arm a new button.
                     self.button_key_presses[key] = None
-            self.root.after_idle(self.clear_button_key_outside_window)
+            self.root.after_idle(self.remember_button_keys_outside_window)
 
-    def clear_button_key_outside_window(self):
+    def remember_button_keys_outside_window(self):
         if not self.root.tk.call("focus", "-displayof", self.root):
-            self.button_key_presses.clear()
+            self.unfocused_button_keys = tuple(self.button_key_presses)
+            for key in self.unfocused_button_keys:
+                self.button_key_presses[key] = None
+
+    def restore_button_key_focus(self, _event):
+        keys, self.unfocused_button_keys = self.unfocused_button_keys, ()
+        for key in keys:
+            # A release in another window does not reach Tk.
+            if key in self.button_key_presses and not self.mouse.action_key_held(key):
+                del self.button_key_presses[key]
 
     def resize_header(self, event, title, language_controls):
         title.configure(wraplength=event.width)
@@ -618,9 +640,8 @@ class PointerApp:
         if self.camera and self.camera.thread.is_alive():
             self.stop_camera("status_stopping")
             return
-        choice = self.camera_index.get().strip()
-        index = int(choice) if 0 < len(choice) <= 10 and choice.isascii() and choice.isdecimal() else -1
-        if not 0 <= index <= MAX_CAMERA_INDEX:
+        index = parse_camera_index(self.camera_index.get())
+        if index is None:
             self.status_label.configure(height=3)
             self.set_message("status", "camera_index_invalid")
             self.set_footer_notice("camera_index_invalid")
@@ -644,6 +665,7 @@ class PointerApp:
         try:
             self.camera = Camera(index)
             self.camera.start()
+            self.camera_index_to_save = index if index != self.last_camera_index else None
         except (OSError, RuntimeError) as error:
             self.finish_camera()
             self.status_label.configure(height=0)
@@ -665,6 +687,7 @@ class PointerApp:
     def finish_camera(self):
         self.disable_input()
         self.camera = None
+        self.camera_index_to_save = None
         self.camera_picker.configure(state="normal")
         self.set_button("camera_button", "open_camera", state="normal")
         self.set_message("mode", "mode_camera_off")
@@ -811,6 +834,10 @@ class PointerApp:
             self.can_enable = can_enable
             self.refresh_right_dwell_button()
         if not self.active:
+            if can_enable and self.camera_index_to_save is not None:
+                save_preference("camera", self.camera_index_to_save)
+                self.last_camera_index = self.camera_index_to_save
+                self.camera_index_to_save = None
             self.configure_action_button(self.pointer_button, state="normal" if self.can_enable else "disabled")
         hint = f"hint_{result.state}"
         if self.settings.motion_only and result.state in ("calibrating", "rearming"):
@@ -947,7 +974,7 @@ def main(argv=None):
     commands = parser.add_mutually_exclusive_group()
     commands.add_argument("--download-model", action="store_true", help=text("cli_download"))
     commands.add_argument("--check", action="store_true", help=text("cli_check"))
-    parser.add_argument("--camera", type=int, default=0, help=text("cli_camera"))
+    parser.add_argument("--camera", type=int, help=text("cli_camera"))
     parser.add_argument("--range-x", type=float, help=text("cli_range_x"))
     parser.add_argument("--range-y", type=float, help=text("cli_range_y"))
     parser.add_argument("--wink-ms", type=int, default=220, help=text("cli_wink"))
@@ -973,6 +1000,8 @@ def main(argv=None):
             return
         if sys.platform != "win32":
             parser.error(text("cli_platform"))
+        if args.camera is None:
+            args.camera = parse_camera_index(load_text_preference("camera")) or 0
         if not 0 <= args.camera <= MAX_CAMERA_INDEX:
             parser.error(text("cli_camera_invalid"))
 

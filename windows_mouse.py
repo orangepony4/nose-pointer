@@ -12,6 +12,7 @@ _VK_MBUTTON = 0x04
 _VK_XBUTTON1 = 0x05
 _VK_XBUTTON2 = 0x06
 _PHYSICAL_MOUSE_BUTTONS = (_VK_LBUTTON, _VK_RBUTTON, _VK_MBUTTON, _VK_XBUTTON1, _VK_XBUTTON2)
+_BUTTON_ACTION_VIRTUAL_KEYS = {"Return": 0x0D, "KP_Enter": 0x0D, "space": 0x20}
 _VK_F8 = 0x77
 _VK_F9 = 0x78
 _KEY_IS_DOWN = 0x8000
@@ -299,6 +300,10 @@ class WindowsMouse:
     def button_held(self) -> bool:
         """Return whether a physical mouse button, including either side button, is down."""
         return any(self._key_state(key) & _KEY_IS_DOWN for key in _PHYSICAL_MOUSE_BUTTONS)
+
+    def action_key_held(self, keysym: str) -> bool:
+        """Read the physical state of a Tk button action key after focus returns."""
+        return bool(self._key_state(_BUTTON_ACTION_VIRTUAL_KEYS[keysym]) & _KEY_IS_DOWN)
 
     def emergency_requested(self) -> bool:
         """Return whether F8 is currently held on the active desktop."""

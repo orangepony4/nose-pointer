@@ -237,6 +237,15 @@ class WindowsMouseTests(unittest.TestCase):
                 self.mouse._key_state.side_effect = lambda key: -32767 if key == button else 0
                 self.assertTrue(self.mouse.button_held())
 
+    def test_action_key_held_checks_the_high_bit_and_maps_both_enter_keys(self):
+        for keysym, virtual_key in (("Return", 0x0D), ("KP_Enter", 0x0D), ("space", 0x20)):
+            with self.subTest(keysym=keysym):
+                self.mouse._key_state.reset_mock()
+                self.mouse._key_state.side_effect = [0, 1, -32768, -32767]
+                self.assertEqual([self.mouse.action_key_held(keysym) for _ in range(4)],
+                                 [False, False, True, True])
+                self.assertEqual(self.mouse._key_state.call_args_list, [call(virtual_key)] * 4)
+
 
 if __name__ == "__main__":
     unittest.main()

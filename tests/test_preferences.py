@@ -23,11 +23,27 @@ class PreferencesTests(unittest.TestCase):
             patch("nose_pointer.PointerApp") as app,
         ):
             main(list(arguments))
+        self.launched_camera = app.call_args.args[-1].camera
         return app.call_args.args[-2], app.call_args.kwargs["initial_dwell_ms"]
 
     def test_missing_preferences_use_existing_defaults_without_writing(self):
         self.assertEqual(self.launch(), (Settings(), DEFAULT_DWELL_MS))
+        self.assertEqual(self.launched_camera, 0)
         self.assertFalse(self.directory.exists())
+
+    def test_remembers_the_camera_and_keeps_cli_overrides_transient(self):
+        save_preference("camera", 3)
+        self.launch()
+        self.assertEqual(self.launched_camera, 3)
+        self.launch("--camera", "1")
+        self.assertEqual(self.launched_camera, 1)
+        self.assertEqual((self.directory / "camera.txt").read_bytes(), b"3\n")
+
+        for invalid in (b"-1", b"1.5", b"2147483648", b"9" * 40, b"\xff"):
+            with self.subTest(invalid=invalid):
+                (self.directory / "camera.txt").write_bytes(invalid)
+                self.launch()
+                self.assertEqual(self.launched_camera, 0)
 
     def test_normal_launch_restores_settings_and_cli_overrides_are_transient(self):
         save_preference("sensitivity", "sensitivity_high")

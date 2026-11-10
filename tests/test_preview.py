@@ -472,6 +472,40 @@ class PreviewTests(unittest.TestCase):
         self.assert_no_system_input()
         self.save_preference.assert_not_called()
 
+    def test_remembers_a_changed_camera_only_after_it_calibrates_in_practice(self):
+        def finish_camera(error=None):
+            self.camera.snapshot.return_value = (None, error)
+            self.camera.thread.is_alive.return_value = False
+            self.app.poll()
+            self.assertIsNone(self.app.camera)
+
+        def open_camera(index):
+            self.camera.thread.is_alive.return_value = True
+            self.app.camera_index.set(str(index))
+            with patch("nose_pointer.Camera", return_value=self.camera) as factory:
+                self.app.toggle_camera()
+            factory.assert_called_once_with(index)
+
+        self.calibrate(0)
+        finish_camera()
+        open_camera(1)
+        finish_camera(camera.CameraFailure("camera_unavailable"))
+        self.save_preference.assert_not_called()
+
+        open_camera(1)
+        self.feed(1.0)
+        self.save_preference.assert_not_called()
+        self.calibrate(1.1)
+        self.save_preference.assert_called_once_with("camera", 1)
+        self.feed(1.5)
+        self.save_preference.assert_called_once_with("camera", 1)
+
+        finish_camera()
+        open_camera(0)
+        self.calibrate(2.0)
+        self.assertEqual(self.save_preference.call_args_list, [call("camera", 1), call("camera", 0)])
+        self.assert_no_system_input()
+
     def test_keyboard_action_activates_once_on_release_and_respects_button_changes(self):
         button = self.app.camera_button
         self.root.focus_get.return_value = button
@@ -518,6 +552,8 @@ class PreviewTests(unittest.TestCase):
 
     def test_keyboard_action_focus_change_disarms_the_original_press_and_any_repeat(self):
         camera_button, pointer_button = self.app.camera_button, self.app.pointer_button
+        self.root.tk.call.return_value = "."
+        pointer_button.master = None
         for button in (camera_button, pointer_button):
             button.instate.return_value = True
         for key in ("Return", "space"):
@@ -525,8 +561,12 @@ class PreviewTests(unittest.TestCase):
                 self.root.focus_get.return_value = camera_button
                 self.app.press_button_key(SimpleNamespace(widget=camera_button, keysym=key))
                 self.app.cancel_button_key(SimpleNamespace(widget=camera_button))
+                self.root.after_idle.call_args.args[0]()
                 self.root.focus_get.return_value = pointer_button
                 event = SimpleNamespace(widget=pointer_button, keysym=key)
+                for binding in self.root.bind.call_args_list:
+                    if binding.args[0] == "<FocusIn>":
+                        binding.args[1](event)
                 self.app.press_button_key(event)
                 self.app.release_button_key(event)
                 camera_button.invoke.assert_not_called()
@@ -535,6 +575,42 @@ class PreviewTests(unittest.TestCase):
                 self.app.release_button_key(event)
                 pointer_button.invoke.assert_called_once_with()
                 pointer_button.invoke.reset_mock()
+        self.mouse.action_key_held.assert_not_called()
+
+    def test_action_keys_recover_after_focus_leaves_the_window(self):
+        button = self.app.camera_button
+        button.instate.return_value = True
+        button.cget.return_value = "Turn off camera"
+        button.master = None
+        self.root.tk.call.return_value = ""
+
+        for key in ("Return", "KP_Enter", "space"):
+            for still_held in (True, False):
+                with self.subTest(key=key, still_held=still_held):
+                    button.invoke.reset_mock()
+                    self.mouse.action_key_held.reset_mock()
+                    event = SimpleNamespace(widget=button, keysym=key)
+                    self.root.focus_get.return_value = button
+                    self.app.press_button_key(event)
+                    self.root.focus_get.return_value = None
+                    self.app.cancel_button_key(event)
+                    self.root.after_idle.call_args.args[0]()
+                    self.mouse.action_key_held.assert_not_called()
+
+                    self.root.focus_get.return_value = button
+                    self.mouse.action_key_held.return_value = still_held
+                    for binding in self.root.bind.call_args_list:
+                        if binding.args[0] == "<FocusIn>":
+                            binding.args[1](event)
+
+                    self.app.press_button_key(event)
+                    self.app.release_button_key(event)
+                    if still_held:
+                        button.invoke.assert_not_called()
+                        self.app.press_button_key(event)
+                        self.app.release_button_key(event)
+                    button.invoke.assert_called_once_with()
+                    self.mouse.action_key_held.assert_called_once_with(key)
 
     def test_action_key_held_from_a_picker_does_not_activate_a_button(self):
         button = self.app.camera_button
