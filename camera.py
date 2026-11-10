@@ -98,6 +98,12 @@ def extract_sample(result):
     return FaceSample(nose.x, nose.y, scores["eyeBlinkLeft"], scores["eyeBlinkRight"])
 
 
+def _infer_frame(cv2, mp, landmarker, frame, timestamp):
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    return extract_sample(landmarker.detect_for_video(image, timestamp))
+
+
 class Camera:
     def __init__(self, index):
         self.index = index
@@ -202,19 +208,21 @@ class Camera:
             failures = 0
             timestamp = max(last_timestamp + 1, int(captured_at * 1000))
             last_timestamp = timestamp
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-            sample = extract_sample(landmarker.detect_for_video(image, timestamp))
+            sample = _infer_frame(cv2, mp, landmarker, frame, timestamp)
             if not self.stop_event.is_set():
                 self.publish(captured_at, sample)
 
 
 def check_inference():
+    import cv2
     import mediapipe as mp
     import numpy as np
 
     with create_landmarker(mp) as landmarker:
-        pixels = np.zeros((160, 160, 3), dtype=np.uint8)
-        image = mp.Image(image_format=mp.ImageFormat.SRGB, data=pixels)
-        if extract_sample(landmarker.detect_for_video(image, 0)) is not None:
+        frame = np.zeros((160, 160, 3), dtype=np.uint8)
+        try:
+            sample = _infer_frame(cv2, mp, landmarker, frame, 0)
+        except cv2.error as error:
+            raise RuntimeError(f"OpenCV could not convert the test frame. {error}") from error
+        if sample is not None:
             raise CameraError("model_blank_face")

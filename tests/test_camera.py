@@ -7,7 +7,8 @@ import unittest
 from unittest.mock import Mock, call, patch
 
 from camera import (
-    AMBIGUOUS_FACE, Camera, CameraError, create_landmarker, download_model, extract_sample, model_is_ready,
+    AMBIGUOUS_FACE, Camera, CameraError, check_inference, create_landmarker, download_model, extract_sample,
+    model_is_ready,
 )
 from tracking import FaceSample
 
@@ -31,6 +32,33 @@ def result(landmarks, blendshapes):
 
 
 class CameraTests(unittest.TestCase):
+    def test_check_converts_a_blank_frame_without_opening_the_camera(self):
+        frame, rgb = object(), object()
+        cv2 = SimpleNamespace(
+            VideoCapture=Mock(), cvtColor=Mock(return_value=rgb), COLOR_BGR2RGB=5, error=FakeCaptureError,
+        )
+        mediapipe = SimpleNamespace(Image=Mock(), ImageFormat=SimpleNamespace(SRGB=1))
+        numpy = SimpleNamespace(zeros=Mock(return_value=frame), uint8=object())
+        landmarker = Mock()
+        landmarker.detect_for_video.return_value = result([], [])
+
+        with (
+            patch.dict("sys.modules", {"cv2": cv2, "mediapipe": mediapipe, "numpy": numpy}),
+            patch("camera.create_landmarker", return_value=nullcontext(landmarker)),
+        ):
+            with self.subTest("blank frame"):
+                check_inference()
+                numpy.zeros.assert_called_once_with((160, 160, 3), dtype=numpy.uint8)
+                cv2.cvtColor.assert_called_once_with(frame, cv2.COLOR_BGR2RGB)
+                mediapipe.Image.assert_called_once_with(image_format=mediapipe.ImageFormat.SRGB, data=rgb)
+                landmarker.detect_for_video.assert_called_once_with(mediapipe.Image.return_value, 0)
+            with self.subTest("conversion failure"):
+                cv2.cvtColor.side_effect = FakeCaptureError("conversion failed")
+                with self.assertRaisesRegex(RuntimeError, "OpenCV.*conversion failed"):
+                    check_inference()
+                landmarker.detect_for_video.assert_called_once()
+        cv2.VideoCapture.assert_not_called()
+
     def test_interrupted_model_write_cleans_staging_and_allows_retry(self):
         model = b"synthetic verified model"
         response = Mock()
