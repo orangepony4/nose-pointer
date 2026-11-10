@@ -68,7 +68,7 @@ set "VERIFY_HASH=%UV_ZIP_SHA%"
 if errorlevel 1 goto bootstrap_failed
 call :verify_sha256
 if errorlevel 1 goto bootstrap_failed
-"%SystemRoot%\System32\tar.exe" -xf "%VERIFY_FILE%" -C "%UV_STAGE%" uv.exe
+"%SystemRoot%\System32\tar.exe" -xOf - uv.exe < "%VERIFY_FILE%" > "%UV_STAGE%\uv.exe"
 if errorlevel 1 goto bootstrap_failed
 set "VERIFY_FILE=%UV_STAGE%\uv.exe"
 set "VERIFY_HASH=%UV_EXE_SHA%"
