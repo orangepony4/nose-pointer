@@ -351,6 +351,40 @@ class PreviewTests(unittest.TestCase):
         self.mouse.move.assert_called_once_with(0.25, 0.8)
         self.mouse.click.assert_not_called()
 
+    def test_enabling_mouse_and_f9_wait_for_frames_captured_during_calibration(self):
+        self.calibrate(0)
+        self.feed(0.50)
+        self.feed(0.67)
+        self.feed(0.76)
+        self.clock.return_value = 1.0
+        self.app.toggle_pointer()
+        self.assertTrue(self.app.active)
+        self.assert_calibration_starts_at_request(1.0)
+
+        self.feed(1.59)
+        self.feed(1.76)
+        self.clock.return_value = 2.0
+        shortcut = next(binding.args[1] for binding in self.root.bind.call_args_list if binding.args[0] == "<F9>")
+        shortcut(None)
+        self.assertTrue(self.app.active)
+        self.assert_calibration_starts_at_request(2.0)
+
+    def assert_calibration_starts_at_request(self, requested_at):
+        self.mouse.reset_mock()
+        self.feed(requested_at - 0.20, MOVED_FACE, wall_time=requested_at + 0.01)
+        self.feed(requested_at, wall_time=requested_at + 0.02)
+        self.feed(requested_at + 0.11)
+        self.feed(requested_at + 0.13)
+        self.assertFalse(self.app.tracker.calibrated)
+        self.assert_no_system_input()
+
+        self.feed(requested_at + self.app.settings.calibration_seconds)
+        self.assertTrue(self.app.tracker.calibrated)
+        self.assert_no_system_input()
+        self.feed(requested_at + 0.39, MOVED_FACE)
+        self.mouse.move.assert_called_once()
+        self.mouse.click.assert_not_called()
+
     def test_focused_f9_recalibrates_once_and_does_not_send_the_pending_wink(self):
         shortcut = next(binding.args[1] for binding in self.root.bind.call_args_list if binding.args[0] == "<F9>")
         self.calibrate(0)

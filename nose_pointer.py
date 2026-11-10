@@ -67,6 +67,7 @@ class PointerApp:
         self.last_frame = None
         self.last_ready_frame_at: float | None = None
         self.last_active_face_at: float | None = None
+        self.calibration_requested_at: float | None = None
         self.last_applied_position = None
         self.recovery_pending = False
         self.right_dwell_armed_at: float | None = None
@@ -714,11 +715,14 @@ class PointerApp:
         self.recenter()
 
     def recenter(self):
+        requested_at = monotonic()
         self.reset_calibration()
+        self.calibration_requested_at = requested_at
         self.set_message("status", "status_recenter_motion" if self.settings.motion_only else "status_recenter")
 
     def reset_calibration(self):
         self.tracker.reset()
+        self.calibration_requested_at = None
         self.can_enable = False
         self.last_ready_frame_at = None
         self.last_applied_position = None
@@ -775,6 +779,9 @@ class PointerApp:
 
     def update_tracking(self, now, sample):
         calibrating = not self.tracker.calibrated
+        if calibrating and self.calibration_requested_at is not None and now < self.calibration_requested_at:
+            # Inference can publish a frame captured before the new calibration was requested.
+            return
         anchor = self.mouse.position() if self.active and calibrating and sample is not None else None
         result = self.tracker.update(now, sample, calibration_position=anchor)
         if self.right_dwell_armed_at is not None and now < self.right_dwell_armed_at:
