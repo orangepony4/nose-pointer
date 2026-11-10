@@ -4,13 +4,13 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.10.4)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.4.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.4)
+**[Windows downloads and release notes](https://github.com/orangepony4/nose-pointer/releases)**
 
 ## English
 
 ### Install on Windows
 
-You need Windows 10 or 11 (x64) and a webcam. Extract the ZIP to a writable folder and double-click **Start Nose Pointer.cmd**. On the first run, the launcher uses uv from PATH or downloads a verified copy from [Astral's releases](https://github.com/astral-sh/uv/releases/tag/0.13.1) into `.uv-bootstrap` inside the extracted folder. It then sets up Python 3.12 and the pinned dependencies and verifies the downloaded MediaPipe model. Setup needs internet access. Camera tracking runs locally after setup.
+You need Windows 10 or 11 (x64) and a webcam. On the releases page, open the newest release and choose **Source code (zip)** under **Assets**. Extract the ZIP to a writable folder and double-click **Start Nose Pointer.cmd**. On the first run, the launcher uses uv from PATH or downloads a verified copy from [Astral's releases](https://github.com/astral-sh/uv/releases/tag/0.13.1) into `.uv-bootstrap` inside the extracted folder. It then sets up Python 3.12 and the pinned dependencies and verifies the downloaded MediaPipe model. Setup needs internet access. Camera tracking runs locally after setup.
 
 If you already have [uv](https://docs.astral.sh/uv/getting-started/installation/) on PATH, you can also run these commands from the extracted folder in PowerShell.
 
@@ -47,7 +47,7 @@ Use **Click mode** (Режим клика) in practice mode.
 
 #### Dwell with one eye open
 
-If you usually keep one eye closed, you can start Dwell using the other eye. Open PowerShell in the extracted folder and run the launcher with your choice.
+If you usually keep one eye closed, you can start Dwell using the other eye in version 0.11.0 or newer. Open PowerShell in the extracted folder and run the launcher with your choice.
 
 ```powershell
 & '.\Start Nose Pointer.cmd' --dwell-eye left
@@ -110,11 +110,11 @@ See the [MIT license](LICENSE).
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.10.4)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.4.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.4)
+**[Загрузки для Windows и описания релизов](https://github.com/orangepony4/nose-pointer/releases)**
 
 ### Запуск на Windows
 
-Нужны 64-битная Windows 10 или 11 (x64) и веб-камера. Распакуйте архив в папку с правом записи и откройте **Start Nose Pointer.cmd**. При первом запуске программа использует установленный uv или скачивает проверенную копию из [релизов Astral](https://github.com/astral-sh/uv/releases/tag/0.13.1) в папку `.uv-bootstrap` внутри распакованного архива. Затем программа настраивает Python 3.12 и зафиксированные зависимости и проверяет скачанную модель MediaPipe. Для настройки нужен интернет. После неё распознавание работает локально.
+Нужны 64-битная Windows 10 или 11 (x64) и веб-камера. На странице релизов откройте самый новый релиз и выберите **Source code (zip)** в разделе **Assets**. Распакуйте архив в папку с правом записи и откройте **Start Nose Pointer.cmd**. При первом запуске программа использует установленный uv или скачивает проверенную копию из [релизов Astral](https://github.com/astral-sh/uv/releases/tag/0.13.1) в папку `.uv-bootstrap` внутри распакованного архива. Затем программа настраивает Python 3.12 и зафиксированные зависимости и проверяет скачанную модель MediaPipe. Для настройки нужен интернет. После неё распознавание работает локально.
 
 Если [uv](https://docs.astral.sh/uv/getting-started/installation/) уже доступен через PATH, можно выполнить эти команды из распакованной папки в PowerShell.
 
@@ -151,7 +151,7 @@ uv run --locked nose_pointer.py
 
 #### Задержка с одним открытым глазом
 
-Если вы обычно держите один глаз закрытым, можно настроить задержку по другому глазу. Откройте PowerShell в распакованной папке и запустите программу с нужным параметром.
+Если вы обычно держите один глаз закрытым, в версии 0.11.0 или новее можно настроить задержку по другому глазу. Откройте PowerShell в распакованной папке и запустите программу с нужным параметром.
 
 ```powershell
 & '.\Start Nose Pointer.cmd' --dwell-eye left
