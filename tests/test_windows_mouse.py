@@ -4,7 +4,8 @@ import unittest
 from unittest.mock import Mock, call, patch
 
 from windows_mouse import (
-    ControlSessionBusy, DisplayLayoutChanged, EmergencyPauseRequested, MouseButtonHeld, PointerMoved, WindowsMouse,
+    ControlSessionBusy, DisplayLayoutChanged, EmergencyPauseRequested, InputFrameExpired, MouseButtonHeld,
+    PointerMoved, WindowsMouse,
 )
 
 
@@ -200,19 +201,63 @@ class WindowsMouseTests(unittest.TestCase):
             self.mouse.click("left", expected_position=expected)
         self.mouse._send_input.assert_not_called()
 
-    def test_partial_click_releases_the_button_even_if_f8_becomes_held(self):
+    def test_frame_expiry_during_layout_check_blocks_active_move_and_click(self):
         self.mouse.begin_control()
+        self.fake_cursor(-629, 325)
+        expected = self.mouse.position()
+        displays = self.mouse._monitor_rectangles.return_value
+        clock = self.enterContext(patch("windows_mouse.monotonic", return_value=0.99))
+
+        def delayed_layout():
+            clock.return_value = 1.01
+            return displays
+
+        self.mouse._monitor_rectangles.side_effect = delayed_layout
+        actions = {
+            "move": lambda: self.mouse.move(0.5, 0.5, valid_until=1.0),
+            "click": lambda: self.mouse.click("left", expected_position=expected, valid_until=1.0),
+        }
+        for name, dispatch in actions.items():
+            with self.subTest(action=name):
+                clock.return_value = 0.99
+                with self.assertRaises(InputFrameExpired):
+                    dispatch()
+                self.mouse._set_cursor_pos.assert_not_called()
+                self.mouse._send_input.assert_not_called()
+
+    def test_dispatch_accepts_exact_frame_deadline_and_prioritizes_f8(self):
+        self.mouse.begin_control()
+        with patch("windows_mouse.monotonic", return_value=1.0) as clock:
+            self.mouse.move(0.5, 0.5, valid_until=1.0)
+            self.mouse.click("left", valid_until=1.0)
+            self.mouse._set_cursor_pos.assert_called_once()
+            self.mouse._send_input.assert_called_once()
+
+            self.mouse._send_input.reset_mock()
+            clock.reset_mock()
+            clock.return_value = 1.01
+            self.mouse._key_state.return_value = -32768
+            with self.assertRaises(EmergencyPauseRequested):
+                self.mouse.click("left", valid_until=1.0)
+            clock.assert_not_called()
+            self.mouse._send_input.assert_not_called()
+
+    def test_partial_click_releases_the_button_after_pause_or_expiry(self):
+        self.mouse.begin_control()
+        clock = self.enterContext(patch("windows_mouse.monotonic", return_value=0.99))
 
         def send_input(_count, _events, _size):
             self.mouse._key_state.return_value = -32768
+            clock.return_value = 1.01
             return 1
 
         self.mouse._send_input.side_effect = send_input
-        self.mouse.click("left")
+        self.mouse.click("left", valid_until=1.0)
         dispatch, release = [entry.args for entry in self.mouse._send_input.call_args_list]
         self.assertEqual([dispatch[0], release[0]], [2, 1])
         self.assertEqual(release[1][0].mi.dwFlags, 0x0004)
         self.mouse._key_state.assert_called_once_with(0x77)
+        clock.assert_called_once_with()
 
     def test_layout_order_is_irrelevant_but_same_bounds_can_have_a_different_layout(self):
         displays = [(0, 0, 100, 100), (100, 0, 200, 100)]

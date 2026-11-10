@@ -12,7 +12,7 @@ from i18n import LANGUAGES, load_language, save_language, translate
 from preferences import load_text_preference, save_preference
 from tracking import Settings, Tracker
 from windows_mouse import (
-    ControlSessionBusy, DisplayLayoutChanged, EmergencyPauseRequested, MouseButtonHeld, PointerMoved,
+    ControlSessionBusy, DisplayLayoutChanged, EmergencyPauseRequested, InputFrameExpired, MouseButtonHeld, PointerMoved,
 )
 
 
@@ -802,6 +802,11 @@ class PointerApp:
         self.pause_for_safety("safety_pointer_moved")
         return True
 
+    def hold_for_stale_frame(self, captured_at):
+        if not self.feed_stale:
+            self.feed_stale = True
+            self.update_tracking(captured_at, None)
+
     def update_tracking(self, now, sample):
         calibrating = not self.tracker.calibrated
         if calibrating and self.calibration_requested_at is not None and now < self.calibration_requested_at:
@@ -854,6 +859,7 @@ class PointerApp:
             self.dwell_bar.configure(value=result.dwell_progress * 100)
         click = None if self.args.no_clicks or self.settings.motion_only else result.click
         system_click = self.active and click is not None
+        valid_until = now + self.settings.max_sample_gap_seconds
         if result.position is not None:
             # Check before a dwell frame can interfere with manual input.
             if system_click and self.cancel_unsafe_click():
@@ -862,18 +868,22 @@ class PointerApp:
                 self.position = result.position
                 self.draw_pad()
             if self.active:
-                self.last_applied_position = anchor if calibrating else self.mouse.move(*result.position)
+                self.last_applied_position = (
+                    anchor if calibrating else self.mouse.move(*result.position, valid_until=valid_until)
+                )
         if click is not None:
             if system_click and self.cancel_unsafe_click():
                 return
             button = click
-            if self.settings.dwell_seconds is not None and self.right_dwell_armed_at is not None:
+            right_dwell = self.settings.dwell_seconds is not None and self.right_dwell_armed_at is not None
+            if right_dwell:
                 button = "right"
-                self.clear_right_dwell(message=None)
             elif self.args.swap_buttons and self.settings.dwell_seconds is None:
                 button = "right" if button == "left" else "left"
             if system_click:
-                self.mouse.click(button, expected_position=self.last_applied_position)
+                self.mouse.click(button, expected_position=self.last_applied_position, valid_until=valid_until)
+            if right_dwell:
+                self.clear_right_dwell(message=None)
             mode = "active" if self.active else "preview"
             self.set_message("last_gesture", f"gesture_{mode}_{button}")
 
@@ -906,16 +916,15 @@ class PointerApp:
                     self.set_footer_notice()
             elif latest and not self.camera.stop_event.is_set():
                 captured_at, sample = latest
+                previous_face_at = self.last_active_face_at
                 try:
                     if sample is AMBIGUOUS_FACE or sample is FACE_JUMP:
                         if self.last_frame != captured_at:
                             self.last_frame = captured_at
                             reason = "safety_multiple" if sample is AMBIGUOUS_FACE else "safety_jump"
                             self.pause_for_safety(reason)
-                    elif now - captured_at > self.settings.max_sample_gap_seconds:
-                        if not self.feed_stale:
-                            self.feed_stale = True
-                            self.update_tracking(captured_at, None)
+                    elif now > captured_at + self.settings.max_sample_gap_seconds:
+                        self.hold_for_stale_frame(captured_at)
                     elif self.last_frame != captured_at:
                         self.feed_stale = False
                         if (self.last_frame is not None
@@ -927,6 +936,10 @@ class PointerApp:
                         self.update_tracking(captured_at, sample)
                 except EmergencyPauseRequested:
                     self.pause()
+                except InputFrameExpired:
+                    # Rejecting a frame at dispatch also leaves the loss timer unchanged.
+                    self.last_active_face_at = previous_face_at
+                    self.hold_for_stale_frame(captured_at)
                 except DisplayLayoutChanged:
                     self.pause_for_safety("safety_display_changed")
                 except PointerMoved:

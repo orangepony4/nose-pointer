@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.10.3)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.3.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.3)
+**[Download the Windows ZIP (v0.10.4)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.4.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.4)
 
 ## English
 
@@ -51,7 +51,7 @@ With system control enabled, tap **F9** in Nose Pointer to recalibrate from the 
 
 When you enable mouse control or request recalibration, the app uses camera frames captured from that moment onward. If you adjust your pose during desktop calibration, keep your final pose briefly as calibration finishes. The current cursor position is the starting point for your next movement.
 
-A short loss of tracking pauses input. Keep your face in view and, in the click modes, open both eyes to resume. If another device moved the cursor during the pause, the app recalibrates at that location. After five seconds without an accepted face frame, Nose Pointer returns to practice mode and requires explicit re-enabling. The app also returns to practice if it sees multiple faces, an abrupt jump, or a face reappearing far from its last position. An abrupt jump can stop control even if the face returns to its previous position before the interface refreshes. Keep one person in view. Tracking loss or a pause clears dwell progress and any pending right click.
+A short loss of tracking pauses input. The app also checks frame freshness immediately before sending a movement or click and waits for fresh frames if the current one has expired. Keep your face in view and, in the click modes, open both eyes to resume. If another device moved the cursor during the pause, the app recalibrates at that location. After five seconds without an accepted face frame, Nose Pointer returns to practice mode and requires explicit re-enabling. The app also returns to practice if it sees multiple faces, an abrupt jump, or a face reappearing far from its last position. An abrupt jump can stop control even if the face returns to its previous position before the interface refreshes. Keep one person in view. Tracking loss or a pause clears dwell progress and any pending right click.
 
 Enabling mouse control requires a recent preview frame. If the camera feed is delayed, wait for calibration in practice mode and select **Enable mouse** again.
 
@@ -100,7 +100,7 @@ See the [MIT license](LICENSE).
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.10.3)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.3.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.3)
+**[Скачать ZIP для Windows (v0.10.4)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.4.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.4)
 
 ### Запуск на Windows
 
@@ -145,7 +145,7 @@ uv run --locked nose_pointer.py
 
 После включения управления мышью или запроса повторной калибровки приложение использует кадры, снятые с этого момента. Если сменили позу при калибровке системной мыши, ненадолго задержитесь в новой позе до её завершения. Следующее движение начнётся с текущей позиции указателя.
 
-При краткой потере отслеживания ввод приостанавливается. Верните лицо в кадр и откройте оба глаза, если используете режим клика. Если за время паузы указатель переместили другим устройством, программа откалибруется на новом месте. Через пять секунд без принятого кадра с лицом приложение возвращается в режим пробы. Для возобновления системного ввода снова нажмите **Включить мышь**. Программа также возвращается в режим пробы, если видит несколько лиц, резкое смещение или лицо, которое снова появилось далеко от прежнего положения. Резкое смещение может отключить управление, даже если лицо уже вернулось на прежнее место к следующему обновлению интерфейса. Оставляйте в кадре одного человека. Потеря отслеживания или пауза отменяет отсчёт задержки и выбранный правый клик.
+При краткой потере отслеживания ввод приостанавливается. Приложение также проверяет свежесть кадра непосредственно перед движением или кликом и ждёт новых кадров, если текущий устарел. Верните лицо в кадр и откройте оба глаза, если используете режим клика. Если за время паузы указатель переместили другим устройством, программа откалибруется на новом месте. Через пять секунд без принятого кадра с лицом приложение возвращается в режим пробы. Для возобновления системного ввода снова нажмите **Включить мышь**. Программа также возвращается в режим пробы, если видит несколько лиц, резкое смещение или лицо, которое снова появилось далеко от прежнего положения. Резкое смещение может отключить управление, даже если лицо уже вернулось на прежнее место к следующему обновлению интерфейса. Оставляйте в кадре одного человека. Потеря отслеживания или пауза отменяет отсчёт задержки и выбранный правый клик.
 
 Для включения мыши нужен свежий кадр из режима пробы. Если кадры задержались, дождитесь калибровки и снова нажмите **Включить мышь**.
 

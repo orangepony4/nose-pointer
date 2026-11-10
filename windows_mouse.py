@@ -4,6 +4,7 @@ import ctypes
 import math
 import sys
 from ctypes import wintypes
+from time import monotonic
 
 
 _VK_LBUTTON = 0x01
@@ -140,6 +141,10 @@ class EmergencyPauseRequested(OSError):
     """The emergency pause key became held before native input dispatch."""
 
 
+class InputFrameExpired(OSError):
+    """The camera frame became too old before native input dispatch."""
+
+
 class WindowsMouse:
     """Read, move and click the cursor in the active Windows desktop."""
 
@@ -258,19 +263,22 @@ class WindowsMouse:
         pixel_x, pixel_y, bounds = self._project_pixel(x, y, self._control_layout)
         return self._normalize_position(pixel_x, pixel_y, bounds)
 
-    def move(self, x: float, y: float) -> tuple[float, float]:
+    def move(self, x: float, y: float, *, valid_until: float | None = None) -> tuple[float, float]:
         """Move to a visible pixel and return its normalized coordinates."""
         if not math.isfinite(x) or not math.isfinite(y):
             raise ValueError("Cursor coordinates must be finite.")
 
         target_x, target_y, bounds = self._project_pixel(x, y, self._checked_layout())
-        self._guard_emergency_pause()
+        self._guard_dispatch(valid_until)
         ctypes.set_last_error(0)
         if not self._set_cursor_pos(target_x, target_y):
             raise _input_error("SetCursorPos could not move the cursor", ctypes.get_last_error())
         return self._normalize_position(target_x, target_y, bounds)
 
-    def click(self, button: str, *, expected_position: tuple[float, float] | None = None) -> None:
+    def click(
+        self, button: str, *, expected_position: tuple[float, float] | None = None,
+        valid_until: float | None = None,
+    ) -> None:
         """Send a down/up pair, checking the target again at dispatch when supplied."""
         if button not in _BUTTON_FLAGS:
             raise ValueError("Mouse button must be 'left' or 'right'.")
@@ -288,7 +296,7 @@ class WindowsMouse:
                 raise MouseButtonHeld
         elif self._control_layout is not None:
             self._checked_layout()
-        self._guard_emergency_pause()
+        self._guard_dispatch(valid_until)
         ctypes.set_last_error(0)
         inserted = self._send_input(2, events, event_size)
         if inserted == 2:
@@ -303,9 +311,11 @@ class WindowsMouse:
             raise _input_error("SendInput could not release the mouse button", ctypes.get_last_error())
         raise _input_error("SendInput could not click the mouse button", ctypes.get_last_error())
 
-    def _guard_emergency_pause(self):
+    def _guard_dispatch(self, valid_until):
         if self._control_lease is not None and self.emergency_requested():
             raise EmergencyPauseRequested
+        if valid_until is not None and monotonic() > valid_until:
+            raise InputFrameExpired
 
     def button_held(self) -> bool:
         """Return whether a physical mouse button, including either side button, is down."""

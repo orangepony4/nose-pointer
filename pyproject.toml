@@ -1,6 +1,6 @@
 [project]
 name = "nose-pointer"
-version = "0.10.3"
+version = "0.10.4"
 description = "A hands-free Windows pointer using a webcam and intentional winks"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

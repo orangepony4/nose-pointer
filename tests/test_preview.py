@@ -1,13 +1,13 @@
 from dataclasses import replace
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, call, patch
+from unittest.mock import ANY, Mock, call, patch
 
 import camera
 from nose_pointer import DWELL_MODE, MOTION_MODE, WINK_MODE, PointerApp
 from tracking import FaceSample, Settings
 from windows_mouse import (
-    ControlSessionBusy, DisplayLayoutChanged, EmergencyPauseRequested, PointerMoved, WindowsMouse,
+    ControlSessionBusy, DisplayLayoutChanged, EmergencyPauseRequested, InputFrameExpired, PointerMoved, WindowsMouse,
 )
 
 
@@ -39,7 +39,7 @@ class PreviewTests(unittest.TestCase):
         self.mouse.button_held.return_value = False
         self.mouse.position.return_value = (0.5, 0.5)
 
-        def move_cursor(x, y):
+        def move_cursor(x, y, *, valid_until=None):
             self.mouse.position.return_value = (x, y)
             return x, y
 
@@ -144,7 +144,7 @@ class PreviewTests(unittest.TestCase):
             source.publish(now, MOVED_FACE)
             self.clock.return_value = now
             self.app.poll()
-        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
+        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position, valid_until=ANY)
 
     def test_unpolled_nose_displacement_uses_the_calibrated_safety_limit(self):
         self.app.apply_tracking_settings(replace(self.app.settings, max_nose_jump=0.125))
@@ -170,7 +170,9 @@ class PreviewTests(unittest.TestCase):
                     self.mouse.end_control.assert_called_once_with()
                 else:
                     self.assertTrue(self.app.active)
-                    self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
+                    self.mouse.click.assert_called_once_with(
+                        "left", expected_position=self.app.last_applied_position, valid_until=ANY,
+                    )
 
     def test_unpolled_nose_displacement_does_not_interrupt_practice(self):
         source = self.attach_camera_feed()
@@ -231,7 +233,7 @@ class PreviewTests(unittest.TestCase):
             self.clock.return_value = now
             self.app.poll()
         self.assertTrue(self.app.active)
-        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
+        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position, valid_until=ANY)
 
     def test_stopping_camera_discards_queued_blink_evidence(self):
         self.arm_system_pointer()
@@ -448,7 +450,7 @@ class PreviewTests(unittest.TestCase):
         self.feed(0.71)
         self.assert_no_system_input()
         self.feed(0.8)
-        self.mouse.move.assert_called_once_with(0.3, 0.6)
+        self.mouse.move.assert_called_once_with(0.3, 0.6, valid_until=ANY)
 
     def test_enable_accepts_a_ready_frame_at_the_freshness_boundary(self):
         self.calibrate(0)
@@ -507,7 +509,7 @@ class PreviewTests(unittest.TestCase):
         self.assert_no_system_input()
         self.assertTrue(self.app.tracker.calibrated)
         self.feed(1.5, replace(OPEN_FACE, nose_y=0.60))
-        self.mouse.move.assert_called_once_with(0.25, 0.8)
+        self.mouse.move.assert_called_once_with(0.25, 0.8, valid_until=ANY)
         self.mouse.click.assert_not_called()
 
     def test_enabling_mouse_and_f9_wait_for_frames_captured_during_calibration(self):
@@ -925,7 +927,7 @@ class PreviewTests(unittest.TestCase):
         self.calibrate(2.1)
         for time in (2.5, 2.7, 2.9, 3.1, 3.3, 3.5, 3.72, 3.9):
             self.feed(time, MOVED_FACE)
-        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
+        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position, valid_until=ANY)
         self.app.pause()
         self.app.mode_picker.configure.assert_called_with(state="readonly")
         self.app.delay_picker.configure.assert_called_with(state="readonly")
@@ -985,14 +987,14 @@ class PreviewTests(unittest.TestCase):
         for time in (0.9, 1.08, 1.26, 1.44, 1.52, 1.7):
             self.feed(time, MOVED_FACE)
         right_target = self.app.last_applied_position
-        self.mouse.click.assert_called_once_with("right", expected_position=right_target)
+        self.mouse.click.assert_called_once_with("right", expected_position=right_target, valid_until=ANY)
         self.assertIsNone(self.app.right_dwell_armed_at)
 
         for time in (1.8, 1.98, 2.16, 2.34, 2.42):
             self.feed(time)
         self.assertEqual(self.mouse.click.call_args_list, [
-            call("right", expected_position=right_target),
-            call("left", expected_position=self.app.last_applied_position),
+            call("right", expected_position=right_target, valid_until=ANY),
+            call("left", expected_position=self.app.last_applied_position, valid_until=ANY),
         ])
         self.assertEqual(self.mouse.position.call_count, 4)
 
@@ -1027,6 +1029,7 @@ class PreviewTests(unittest.TestCase):
         adapter._key_state = Mock(return_value=0)
         self.mouse.position.return_value = (120 / 199, 150 / 199)
         self.enterContext(patch("windows_mouse.ctypes.set_last_error", create=True))
+        self.enterContext(patch("windows_mouse.monotonic", self.clock))
 
         def move_cursor(x, y):
             self.mouse.position.return_value = (x / 199, y / 199)
@@ -1042,7 +1045,7 @@ class PreviewTests(unittest.TestCase):
             self.feed(now, replace(OPEN_FACE, nose_x=0.536))
         at_edge = (100 / 199, 150 / 199)
         self.assertEqual(self.app.last_applied_position, at_edge)
-        self.mouse.click.assert_called_once_with("left", expected_position=at_edge)
+        self.mouse.click.assert_called_once_with("left", expected_position=at_edge, valid_until=ANY)
 
         for now in (1.58, 1.74, 1.90, 2.06, 2.19):
             self.feed(now, replace(OPEN_FACE, nose_x=0.549))
@@ -1053,8 +1056,8 @@ class PreviewTests(unittest.TestCase):
         for now in (2.33, 2.49, 2.65, 2.81, 2.94):
             self.feed(now, OPEN_FACE)
         self.assertEqual(self.mouse.click.call_args_list, [
-            call("left", expected_position=at_edge),
-            call("left", expected_position=(120 / 199, 150 / 199)),
+            call("left", expected_position=at_edge, valid_until=ANY),
+            call("left", expected_position=(120 / 199, 150 / 199), valid_until=ANY),
         ])
 
         adapter._monitor_rectangles.return_value = ((0, 0, 100, 90), displays[1])
@@ -1072,7 +1075,7 @@ class PreviewTests(unittest.TestCase):
         self.app.toggle_right_dwell()
         self.feed(0.8)
 
-        def clipped_move(x, y):
+        def clipped_move(x, y, *, valid_until=None):
             self.mouse.position.return_value = (0.25, 0.25)
             return x, y
 
@@ -1186,7 +1189,7 @@ class PreviewTests(unittest.TestCase):
         self.assertTrue(self.app.active)
         self.mouse.position.assert_called_once()
         self.mouse.move.assert_called_once()
-        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
+        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position, valid_until=ANY)
 
     def test_pointer_movement_detected_at_dispatch_pauses_system_control(self):
         self.arm_system_pointer()
@@ -1195,7 +1198,7 @@ class PreviewTests(unittest.TestCase):
         for now in (0.80, 0.92):
             self.feed(now, LEFT_WINK)
         self.feed(1.08)
-        self.mouse.click.assert_called_once_with("left", expected_position=target)
+        self.mouse.click.assert_called_once_with("left", expected_position=target, valid_until=ANY)
         self.assertFalse(self.app.active)
         self.assertEqual(self.app.safety_notice, "safety_pointer_moved")
         self.mouse.end_control.assert_called_once()
@@ -1412,7 +1415,7 @@ class PreviewTests(unittest.TestCase):
         self.feed(1.73, LEFT_WINK)
         self.feed(1.84, LEFT_WINK)
         self.feed(2.00)
-        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
+        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position, valid_until=ANY)
 
     def test_recovery_after_loss_keeps_an_externally_moved_cursor_in_place(self):
         self.arm_system_pointer()
@@ -1436,7 +1439,7 @@ class PreviewTests(unittest.TestCase):
         self.assertTrue(self.app.tracker.calibrated)
         self.assert_no_system_input()
         self.feed(1.6)
-        self.mouse.move.assert_called_once_with(0.22, 0.72)
+        self.mouse.move.assert_called_once_with(0.22, 0.72, valid_until=ANY)
         self.mouse.click.assert_not_called()
 
     def test_frame_gap_without_a_paused_poll_also_checks_cursor(self):
@@ -1581,6 +1584,69 @@ class PreviewTests(unittest.TestCase):
                 self.assertEqual(self.app.mode.get(), self.app.text("mode_preview"))
                 self.assertEqual(self.app.status.get(), self.app.text("status_paused"))
                 self.mouse.end_control.assert_called_once_with()
+
+    def test_frame_expiring_at_dispatch_temporarily_holds_input_in_each_mode(self):
+        scenarios = {
+            WINK_MODE: ("click", ((0.80, LEFT_WINK), (0.92, LEFT_WINK)), (1.08, OPEN_FACE)),
+            DWELL_MODE: ("click", ((0.80, OPEN_FACE), (0.90, MOVED_FACE), (1.08, MOVED_FACE),
+                                   (1.26, MOVED_FACE), (1.44, MOVED_FACE)), (1.52, MOVED_FACE)),
+            MOTION_MODE: ("move", (), (0.80, MOVED_FACE)),
+        }
+        for mode, (action, preparation, (captured_at, sample)) in scenarios.items():
+            with self.subTest(mode=mode):
+                self.app.disable_input()
+                if mode == DWELL_MODE:
+                    self.select_quick_dwell()
+                else:
+                    self.app.click_mode.set(self.app.text(mode))
+                    self.app.change_click_mode()
+                self.arm_system_pointer()
+                if mode == DWELL_MODE:
+                    self.app.toggle_right_dwell()
+                for now, earlier_sample in preparation:
+                    self.feed(now, earlier_sample)
+                previous_position = self.app.last_applied_position
+                previous_face_at = self.app.last_active_face_at
+                deadline = captured_at + self.app.settings.max_sample_gap_seconds
+
+                def expire_at_dispatch(*_args, valid_until, **_kwargs):
+                    self.assertEqual(valid_until, deadline)
+                    self.clock.return_value = deadline + 0.01
+                    raise InputFrameExpired
+
+                with patch.object(self.mouse, action, side_effect=expire_at_dispatch) as dispatch:
+                    self.feed(captured_at, sample)
+                    self.app.poll()
+                    dispatch.assert_called_once()
+                self.assertTrue(self.app.active)
+                self.assertTrue(self.app.feed_stale)
+                self.assertTrue(self.app.recovery_pending)
+                self.assertEqual(self.app.status.get(), self.app.text("hint_paused"))
+                self.assertEqual(self.app.last_applied_position, previous_position)
+                self.assertEqual(self.app.last_active_face_at, previous_face_at)
+                self.mouse.end_control.assert_not_called()
+                if mode == DWELL_MODE:
+                    self.assertIsNone(self.app.right_dwell_armed_at)
+                    self.assertEqual(self.app.last_gesture.get(), self.app.text("right_cancelled"))
+
+                self.mouse.reset_mock()
+                recovery_sample = MOVED_FACE if mode == DWELL_MODE else OPEN_FACE
+                self.feed(deadline + 0.02, recovery_sample)
+                self.feed(deadline + 0.18, recovery_sample)
+                self.assertTrue(self.app.active)
+                self.assertFalse(self.app.feed_stale)
+                self.assertFalse(self.app.recovery_pending)
+                self.mouse.move.assert_called_once()
+                self.mouse.click.assert_not_called()
+
+    def test_frame_at_exact_age_limit_is_still_passed_to_the_adapter(self):
+        self.arm_system_pointer()
+        captured_at = 0.80
+        deadline = captured_at + self.app.settings.max_sample_gap_seconds
+        self.feed(captured_at, MOVED_FACE, wall_time=deadline)
+        self.assertTrue(self.app.active)
+        self.assertFalse(self.app.feed_stale)
+        self.mouse.move.assert_called_once_with(*self.app.position, valid_until=deadline)
 
     def test_short_wink_with_slow_reopening_does_not_send_system_input(self):
         self.arm_system_pointer()
