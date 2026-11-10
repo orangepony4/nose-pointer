@@ -231,7 +231,7 @@ class TrackingTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     Settings(max_nose_jump=invalid)
 
-    def test_missing_invalid_or_stale_samples_break_the_jump_comparison(self):
+    def test_missing_invalid_or_stale_samples_still_check_a_calibrated_face_jump(self):
         for gap in ("missing", "invalid", "stale"):
             with self.subTest(gap=gap):
                 tracker = self.ready_tracker()
@@ -241,8 +241,8 @@ class TrackingTests(unittest.TestCase):
                     tracker.update(0.10, face(left=math.nan))
                 now = 0.31 if gap == "stale" else 0.15
                 result = tracker.update(now, face(0.76))
-                self.assertEqual(result.state, "rearming")
-                self.assertTrue(result.calibrated)
+                self.assertEqual(result.state, "face_jump")
+                self.assertFalse(result.calibrated)
                 self.assertIsNone(result.position)
                 self.assertIsNone(result.click)
 

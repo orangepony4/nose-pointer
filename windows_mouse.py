@@ -9,6 +9,9 @@ from ctypes import wintypes
 _VK_LBUTTON = 0x01
 _VK_RBUTTON = 0x02
 _VK_MBUTTON = 0x04
+_VK_XBUTTON1 = 0x05
+_VK_XBUTTON2 = 0x06
+_PHYSICAL_MOUSE_BUTTONS = (_VK_LBUTTON, _VK_RBUTTON, _VK_MBUTTON, _VK_XBUTTON1, _VK_XBUTTON2)
 _VK_F8 = 0x77
 _VK_F9 = 0x78
 _KEY_IS_DOWN = 0x8000
@@ -241,8 +244,8 @@ class WindowsMouse:
         raise _input_error("SendInput could not click the mouse button", ctypes.get_last_error())
 
     def button_held(self) -> bool:
-        """Return whether a standard physical mouse button is currently down."""
-        return any(self._key_state(key) & _KEY_IS_DOWN for key in (_VK_LBUTTON, _VK_RBUTTON, _VK_MBUTTON))
+        """Return whether a physical mouse button, including either side button, is down."""
+        return any(self._key_state(key) & _KEY_IS_DOWN for key in _PHYSICAL_MOUSE_BUTTONS)
 
     def emergency_requested(self) -> bool:
         """Return whether F8 is currently held on the active desktop."""

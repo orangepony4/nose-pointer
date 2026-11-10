@@ -929,6 +929,26 @@ class PreviewTests(unittest.TestCase):
         self.assertFalse(self.app.tracker.calibrated)
         self.assert_no_system_input()
 
+    def test_far_face_after_short_tracking_loss_disarms_until_explicit_reenable(self):
+        self.arm_system_pointer()
+        self.feed(0.80)
+        self.mouse.reset_mock()
+        self.feed(0.90, None)
+        self.assertTrue(self.app.active)
+
+        replacement = FaceSample(0.76, 0.5, 0.1, 0.1)
+        self.feed(0.99, replacement)
+        self.feed(1.15, replacement)
+        self.assert_no_system_input()
+        self.assertFalse(self.app.active)
+        self.assertEqual(self.app.safety_notice, "safety_jump")
+
+        for now in (1.25, 1.35, 1.46):
+            self.feed(now, replacement)
+        self.assertTrue(self.app.can_enable)
+        self.assertFalse(self.app.active)
+        self.assert_no_system_input()
+
     def test_recovery_is_immediate_at_the_last_applied_pixel(self):
         self.arm_system_pointer()
         applied = (0.29, 0.67)

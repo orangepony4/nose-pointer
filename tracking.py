@@ -145,7 +145,8 @@ class Tracker:
         elapsed = now - self._last_update if self._last_update is not None else 0.0
         if elapsed > self.settings.max_sample_gap_seconds:
             self._break_continuity()
-            self._last_nose = None
+            if not self.calibrated:
+                self._last_nose = None
             elapsed = 0.0
         self._last_update = now
 
@@ -153,7 +154,9 @@ class Tracker:
             sample.nose_x, sample.nose_y, sample.left_blink, sample.right_blink
         )):
             self._break_continuity()
-            self._last_nose = None
+            # A calibrated tracker still needs to check where a face returns.
+            if not self.calibrated:
+                self._last_nose = None
             return self._hold("paused")
 
         previous_nose = self._last_nose
