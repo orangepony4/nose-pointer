@@ -66,11 +66,14 @@ class PreviewTests(unittest.TestCase):
         pad.winfo_width.return_value = 200
         pad.winfo_height.return_value = 150
         self.buttons = [Mock(), Mock(), Mock()]
+        frame = Mock(winfo_width=Mock(return_value=500))
+        label = Mock(winfo_reqwidth=Mock(return_value=80))
+        combos = [Mock(winfo_reqwidth=Mock(return_value=100)) for _ in range(5)]
         with (
-            patch.multiple("nose_pointer.tk", Frame=Mock(), Label=Mock(),
+            patch.multiple("nose_pointer.tk", Frame=Mock(return_value=frame), Label=Mock(return_value=label),
                            Canvas=Mock(side_effect=[workspace, pad]), StringVar=StringValue),
             patch.multiple("nose_pointer.ttk", Style=Mock(), Button=Mock(side_effect=self.buttons),
-                           Combobox=Mock(side_effect=[Mock(), Mock(), Mock(), Mock(), Mock()]), Progressbar=Mock(),
+                           Combobox=Mock(side_effect=combos), Progressbar=Mock(),
                            Scrollbar=Mock(), Spinbox=Mock()),
         ):
             return PointerApp(self.root, self.mouse, settings,

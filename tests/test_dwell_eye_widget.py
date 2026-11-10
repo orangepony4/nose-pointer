@@ -22,6 +22,7 @@ class DwellEyeWidgetTests(unittest.TestCase):
             self.skipTest(f"No Tk display: {error}")
         self.addCleanup(root.destroy)
         root.withdraw()
+        root.tk.call("tk", "scaling", 96 / 72)
         mouse = Mock()
         mouse.emergency_requested.return_value = False
         mouse.recenter_requested.return_value = False
@@ -64,8 +65,10 @@ class DwellEyeWidgetTests(unittest.TestCase):
 
         self.choose(app.mode_picker, 0)
         self.assertEqual(app.dwell_controls.winfo_manager(), "")
+        self.assertEqual(app.dwell_eye_row.winfo_manager(), "")
         self.choose(app.mode_picker, 1)
         self.assertEqual(app.dwell_controls.winfo_manager(), "pack")
+        self.assertEqual(app.dwell_eye_row.winfo_manager(), "grid")
         self.assertEqual(picker.get(), "Оба глаза")
         self.assertEqual(self.save_preference.call_args_list, [call("click-mode", WINK_MODE), call("click-mode", DWELL_MODE)])
         self.assertEqual(app.root.state(), "withdrawn")
@@ -76,12 +79,25 @@ class DwellEyeWidgetTests(unittest.TestCase):
     def test_motion_only_lock_keeps_eye_picker_hidden_and_disabled(self):
         app, mouse = self.open_app(Settings(motion_only=True), no_clicks=True)
         self.assertEqual(app.dwell_controls.winfo_manager(), "")
+        self.assertEqual(app.dwell_eye_row.winfo_manager(), "")
         self.assertTrue(app.dwell_eye_picker.instate(["disabled"]))
         self.choose(app.dwell_eye_picker, 2)
         self.assertIsNone(app.settings.dwell_eye)
         self.assertEqual(app.dwell_eye_picker.current(), 0)
         self.assertFalse(app.root.winfo_viewable())
         self.save_preference.assert_not_called()
+        self.assertEqual(mouse.mock_calls, [])
+
+    def test_eye_picker_uses_spare_mode_row_space_and_stacks_at_narrow_widths(self):
+        app, mouse = self.open_app(Settings(dwell_seconds=1.2))
+        for language in (0, 1):
+            self.choose(app.language_picker, language)
+            app.root.update_idletasks()
+            for width, expected_row in ((490, 0), (320, 1)):
+                with self.subTest(language=app.language, width=width):
+                    app.click_controls.event_generate("<Configure>", width=width, height=24, when="now")
+                    self.assertEqual(int(app.dwell_eye_row.grid_info()["row"]), expected_row)
+        self.assertFalse(app.root.winfo_viewable())
         self.assertEqual(mouse.mock_calls, [])
 
 

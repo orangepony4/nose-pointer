@@ -28,6 +28,7 @@ DWELL_MODE = "dwell"
 MOTION_MODE = "motion"
 CLICK_MODES = (WINK_MODE, DWELL_MODE, MOTION_MODE)
 DWELL_EYES = {"dwell_eye_both": None, "dwell_eye_left": "left", "dwell_eye_right": "right"}
+CHOICE_GAP = 9
 SENSITIVITY_PRESETS = {
     "sensitivity_low": (0.18, 0.15, Settings.dead_zone),
     "sensitivity_standard": (Settings.range_x, Settings.range_y, Settings.dead_zone),
@@ -184,15 +185,28 @@ class PointerApp:
         self.layout_choice(sensitivity_row, sensitivity_label, self.sensitivity_picker)
         self.sensitivity_picker.bind("<<ComboboxSelected>>", self.change_sensitivity)
 
-        click_row = tk.Frame(settings_controls, bg=BACKGROUND)
-        click_row.pack(fill="x")
-        click_label = self.make_label(click_row, "click_mode", font=("Segoe UI", 10), fg=INK)
+        self.click_controls = tk.Frame(settings_controls, bg=BACKGROUND)
+        self.click_controls.pack(fill="x")
+        self.click_controls.columnconfigure(0, weight=1)
+        click_row = tk.Frame(self.click_controls, bg=BACKGROUND)
+        click_row.grid(row=0, column=0, sticky="ew")
+        self.click_mode_label = self.make_label(click_row, "click_mode", font=("Segoe UI", 10), fg=INK)
         self.click_mode = tk.StringVar(value=self.text(self.selected_click_mode()))
         self.mode_picker = ttk.Combobox(click_row, textvariable=self.click_mode,
                                        values=self.choice_labels(CLICK_MODES), width=18,
                                        state="disabled" if args.no_clicks else "readonly")
-        self.layout_choice(click_row, click_label, self.mode_picker)
+        self.layout_choice(click_row, self.click_mode_label, self.mode_picker)
         self.mode_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
+        self.dwell_eye_row = tk.Frame(self.click_controls, bg=BACKGROUND)
+        self.dwell_eye_label = self.make_label(self.dwell_eye_row, "dwell_eye", font=("Segoe UI", 10), fg=INK)
+        self.dwell_eye = tk.StringVar(value=self.dwell_eye_text())
+        self.dwell_eye_picker = ttk.Combobox(
+            self.dwell_eye_row, textvariable=self.dwell_eye, values=self.choice_labels(DWELL_EYES), width=12,
+            state="disabled" if args.no_clicks else "readonly",
+        )
+        self.layout_choice(self.dwell_eye_row, self.dwell_eye_label, self.dwell_eye_picker)
+        self.dwell_eye_picker.bind("<<ComboboxSelected>>", self.change_dwell_eye)
+        self.click_controls.bind("<Configure>", lambda event: self.layout_dwell_eye(event.width))
         current_delay = round(settings.dwell_seconds * 1000) if settings.dwell_seconds is not None else initial_dwell_ms
         self.dwell_presets = tuple(sorted({*DWELL_PRESETS_MS, current_delay}))
         self.dwell_durations = self.delay_choices()
@@ -211,16 +225,6 @@ class PointerApp:
         self.delay_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
         self.dwell_bar = ttk.Progressbar(dwell_actions, length=65, maximum=100, mode="determinate")
         self.dwell_bar.pack(side="left", fill="x", expand=True, padx=(12, 9))
-        dwell_eye_row = tk.Frame(self.dwell_controls, bg=BACKGROUND)
-        dwell_eye_row.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(7, 0))
-        dwell_eye_label = self.make_label(dwell_eye_row, "dwell_eye", font=("Segoe UI", 10), fg=INK)
-        self.dwell_eye = tk.StringVar(value=self.dwell_eye_text())
-        self.dwell_eye_picker = ttk.Combobox(
-            dwell_eye_row, textvariable=self.dwell_eye, values=self.choice_labels(DWELL_EYES), width=12,
-            state="disabled" if args.no_clicks else "readonly",
-        )
-        self.layout_choice(dwell_eye_row, dwell_eye_label, self.dwell_eye_picker)
-        self.dwell_eye_picker.bind("<<ComboboxSelected>>", self.change_dwell_eye)
 
         footer = tk.Frame(shell, bg=BACKGROUND)
         footer.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
@@ -354,15 +358,30 @@ class PointerApp:
 
     def layout_choice(self, row, label, picker):
         label.grid(row=0, column=0, sticky="w")
-        picker.grid(row=0, column=1, padx=(9, 0), sticky="w")
+        picker.grid(row=0, column=1, padx=(CHOICE_GAP, 0), sticky="w")
 
         def fit(event):
-            if label.winfo_reqwidth() + picker.winfo_reqwidth() + 9 > event.width:
+            if label.winfo_reqwidth() + picker.winfo_reqwidth() + CHOICE_GAP > event.width:
                 picker.grid_configure(row=1, column=0, padx=0)
             else:
-                picker.grid_configure(row=0, column=1, padx=(9, 0))
+                picker.grid_configure(row=0, column=1, padx=(CHOICE_GAP, 0))
 
         row.bind("<Configure>", fit)
+
+    def layout_dwell_eye(self, width):
+        if self.settings.dwell_seconds is None:
+            self.dwell_eye_row.grid_remove()
+            self.click_controls.columnconfigure(1, minsize=0)
+            return
+        mode_width = self.click_mode_label.winfo_reqwidth() + self.mode_picker.winfo_reqwidth() + CHOICE_GAP
+        eye_width = self.dwell_eye_label.winfo_reqwidth() + self.dwell_eye_picker.winfo_reqwidth() + CHOICE_GAP
+        gap = 12
+        if mode_width + eye_width + gap <= width:
+            self.click_controls.columnconfigure(1, minsize=eye_width + gap)
+            self.dwell_eye_row.grid(row=0, column=1, columnspan=1, sticky="ew", padx=(gap, 0), pady=0)
+        else:
+            self.click_controls.columnconfigure(1, minsize=0)
+            self.dwell_eye_row.grid(row=1, column=0, columnspan=2, sticky="ew", padx=0, pady=(7, 0))
 
     def resize_footer(self, event):
         if event.widget is not self.root:
@@ -550,6 +569,7 @@ class PointerApp:
         self.mode_picker.configure(values=self.choice_labels(CLICK_MODES))
         for label, key in self.static_labels:
             label.configure(text=self.text(key))
+        self.layout_dwell_eye(self.click_controls.winfo_width())
         self.refresh_action_labels()
         for target in self.messages:
             self.render_message(target)
@@ -557,6 +577,7 @@ class PointerApp:
         save_language(language)
 
     def show_click_instructions(self):
+        self.layout_dwell_eye(self.click_controls.winfo_width())
         self.dwell_bar.configure(value=0)
         if self.settings.dwell_seconds is not None:
             self.dwell_controls.pack(fill="x", pady=(8, 0))
