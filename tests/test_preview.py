@@ -685,6 +685,64 @@ class PreviewTests(unittest.TestCase):
         self.assertFalse(self.app.active)
         self.assert_no_system_input()
 
+    def fail_camera_on_exit(self, source, failure):
+        def worker_finished():
+            with source.lock:
+                source.error = failure
+            return False
+
+        source.thread.is_alive.side_effect = worker_finished
+
+    def test_startup_error_published_after_snapshot_is_reported_and_can_retry(self):
+        source = self.attach_camera_feed()
+        self.fail_camera_on_exit(source, camera.CameraFailure("camera_unavailable"))
+        self.app.poll()
+        self.assertIsNone(self.app.camera)
+        self.assertEqual(self.app.status.get(), self.app.text("camera_unavailable"))
+        self.assertEqual(self.app.footer_notice.get(), self.app.text("camera_unavailable_brief"))
+
+        healthy = camera.Camera(0)
+        healthy.thread = Mock()
+        healthy.thread.is_alive.return_value = True
+        with patch("nose_pointer.Camera", return_value=healthy):
+            self.app.toggle_camera()
+        healthy.thread.start.assert_called_once_with()
+        for now in (0.10, 0.20, 0.30, 0.41):
+            healthy.publish(now, OPEN_FACE)
+            self.clock.return_value = now
+            self.app.poll()
+        self.assertTrue(self.app.can_enable)
+        self.assertFalse(self.app.active)
+        self.assertEqual(self.app.footer_notice.get(), "")
+        self.assert_no_system_input()
+
+    def test_active_camera_error_published_after_snapshot_disarms_with_detail(self):
+        self.arm_system_pointer()
+        source = self.attach_camera_feed()
+        source.publish(0.80, MOVED_FACE)
+        self.clock.return_value = 0.80
+        self.fail_camera_on_exit(source, camera.CameraFailure("camera_error_detail", "device disconnected"))
+        self.app.poll()
+        self.assertFalse(self.app.active)
+        self.assertIsNone(self.app.camera)
+        self.assertEqual(self.app.status.get(), self.app.text("camera_error_detail", detail="device disconnected"))
+        self.mouse.end_control.assert_called_once_with()
+        self.assert_no_system_input()
+
+    def test_explicit_stop_wins_when_error_is_published_after_snapshot(self):
+        self.arm_system_pointer()
+        source = self.attach_camera_feed()
+        self.app.toggle_camera()
+        self.assertTrue(source.stop_event.is_set())
+        self.fail_camera_on_exit(source, camera.CameraFailure("camera_error_detail", "late read error"))
+        self.app.poll()
+        self.assertFalse(self.app.active)
+        self.assertIsNone(self.app.camera)
+        self.assertEqual(self.app.status.get(), self.app.text("status_camera_off"))
+        self.assertEqual(self.app.footer_notice.get(), "")
+        self.mouse.end_control.assert_called_once_with()
+        self.assert_no_system_input()
+
     def test_camera_number_can_change_after_a_failed_open_or_a_completed_stop(self):
         self.app.camera_picker.configure.assert_called_with(state="disabled")
         self.camera.snapshot.return_value = (None, camera.CameraFailure("camera_unavailable"))

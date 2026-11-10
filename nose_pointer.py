@@ -963,9 +963,13 @@ class PointerApp:
             if (self.active and self.last_active_face_at is not None
                     and now >= self.last_active_face_at + FACE_LOSS_GRACE_SECONDS):
                 self.pause_for_safety("safety_loss")
+            worker_finished = not self.camera.thread.is_alive()
+            if worker_finished and error is None and not self.camera.stop_event.is_set():
+                # The worker can publish its final error after the first snapshot.
+                _, error = self.camera.snapshot()
             if error is not None and not self.camera.stop_event.is_set():
                 self.stop_camera(error.key, detail=error.detail)
-            if not self.camera.thread.is_alive():
+            if worker_finished:
                 stopped_by_user = self.messages["status"][0] == ("status_stopping",)
                 self.finish_camera()
                 if error is None or stopped_by_user:
