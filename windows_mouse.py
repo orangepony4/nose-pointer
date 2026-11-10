@@ -136,6 +136,10 @@ class MouseButtonHeld(OSError):
     """A physical mouse button is down before an automatic click."""
 
 
+class EmergencyPauseRequested(OSError):
+    """The emergency pause key became held before native input dispatch."""
+
+
 class WindowsMouse:
     """Read, move and click the cursor in the active Windows desktop."""
 
@@ -260,6 +264,7 @@ class WindowsMouse:
             raise ValueError("Cursor coordinates must be finite.")
 
         target_x, target_y, bounds = self._project_pixel(x, y, self._checked_layout())
+        self._guard_emergency_pause()
         ctypes.set_last_error(0)
         if not self._set_cursor_pos(target_x, target_y):
             raise _input_error("SetCursorPos could not move the cursor", ctypes.get_last_error())
@@ -283,6 +288,7 @@ class WindowsMouse:
                 raise MouseButtonHeld
         elif self._control_layout is not None:
             self._checked_layout()
+        self._guard_emergency_pause()
         ctypes.set_last_error(0)
         inserted = self._send_input(2, events, event_size)
         if inserted == 2:
@@ -296,6 +302,10 @@ class WindowsMouse:
                     return
             raise _input_error("SendInput could not release the mouse button", ctypes.get_last_error())
         raise _input_error("SendInput could not click the mouse button", ctypes.get_last_error())
+
+    def _guard_emergency_pause(self):
+        if self._control_lease is not None and self.emergency_requested():
+            raise EmergencyPauseRequested
 
     def button_held(self) -> bool:
         """Return whether a physical mouse button, including either side button, is down."""

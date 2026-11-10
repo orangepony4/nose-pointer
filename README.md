@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.10.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.0.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.0)
+**[Download the Windows ZIP (v0.10.1)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.1.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.1)
 
 ## English
 
@@ -29,7 +29,7 @@ The app remembers the sensitivity preset, click mode and dwell delay you choose.
 1. Select **Open camera** (Открыть камеру). The green dot is a practice pointer. Your Windows cursor stays under your usual control.
 2. Look straight ahead while the app calibrates. The status shows calibration progress. Keep both eyes open in the click modes. Try moving the dot, then hold a wink for about a quarter of a second and open the eye. The app shows the recognized click below the practice area.
 3. Choose your click mode and sensitivity while still in practice mode. Select **Enable mouse** (Включить мышь) when ready. Calibration uses the current cursor position as its starting point, and the pointer can reach across multiple monitors.
-4. Tap **F8** in Nose Pointer to pause. In another window, hold **F8** briefly. You can also press **Esc** in Nose Pointer, select **Pause** (Пауза), or close the app. **Turn off camera** (Выключить камеру) stops capture.
+4. Tap **F8** in Nose Pointer to pause. In another window, hold **F8** briefly. The app checks **F8** again just before moving or clicking. You can also press **Esc** in Nose Pointer, select **Pause** (Пауза), or close the app. **Turn off camera** (Выключить камеру) stops capture.
 
 If the default camera fails to open or points at the wrong device, turn it off if needed, change **Camera number** to `1` or another number, and select **Open camera** again. After the new camera calibrates in practice mode, Nose Pointer remembers its number for the next launch. The camera starts off each time.
 
@@ -100,7 +100,7 @@ See the [MIT license](LICENSE).
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.10.0)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.0.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.0)
+**[Скачать ZIP для Windows (v0.10.1)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.10.1.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.10.1)
 
 ### Запуск на Windows
 
@@ -123,7 +123,7 @@ uv run --locked nose_pointer.py
 1. Нажмите **Открыть камеру**. В режиме пробы зелёная точка движется в окне, а курсор Windows остаётся под вашим обычным управлением.
 2. Смотрите прямо во время калибровки. В строке состояния видно, сколько уже пройдено. В режимах клика держите оба глаза открытыми. Попробуйте подвигать точку, затем подмигните одним глазом примерно на четверть секунды и откройте его. Под тестовым полем появится сторона распознанного клика.
 3. Подберите режим клика и чувствительность в режиме пробы. Нажмите **Включить мышь**, когда будете готовы. Текущая позиция указателя станет опорной точкой. Управление охватывает и дополнительные мониторы.
-4. Для паузы нажмите **F8** в окне Nose Pointer. В другом окне ненадолго удерживайте **F8**. Также можно нажать **Esc** в приложении, выбрать **Паузу** или закрыть окно. Кнопка **Выключить камеру** останавливает захват.
+4. Для паузы нажмите **F8** в окне Nose Pointer. В другом окне ненадолго удерживайте **F8**. Приложение проверяет **F8** ещё раз перед движением или кликом. Также можно нажать **Esc** в приложении, выбрать **Паузу** или закрыть окно. Кнопка **Выключить камеру** останавливает захват.
 
 Если камера не открывается или выбрано другое устройство, выключите камеру при необходимости, измените **Номер камеры** на `1` или другой номер и снова нажмите **Открыть камеру**. После калибровки в режиме пробы Nose Pointer запомнит новый номер. При каждом запуске камера выключена.
 

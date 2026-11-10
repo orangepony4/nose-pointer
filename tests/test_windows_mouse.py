@@ -3,7 +3,9 @@ from ctypes import wintypes
 import unittest
 from unittest.mock import Mock, call, patch
 
-from windows_mouse import ControlSessionBusy, DisplayLayoutChanged, MouseButtonHeld, PointerMoved, WindowsMouse
+from windows_mouse import (
+    ControlSessionBusy, DisplayLayoutChanged, EmergencyPauseRequested, MouseButtonHeld, PointerMoved, WindowsMouse,
+)
 
 
 class WindowsMouseTests(unittest.TestCase):
@@ -17,7 +19,7 @@ class WindowsMouseTests(unittest.TestCase):
         self.mouse._get_cursor_pos = Mock()
         self.mouse._set_cursor_pos = Mock(return_value=True)
         self.mouse._send_input = Mock(return_value=2)
-        self.mouse._key_state = Mock()
+        self.mouse._key_state = Mock(return_value=0)
         self.mouse._create_mutex = Mock(return_value=1)
         self.mouse._close_handle = Mock(return_value=True)
         self.mouse._control_lease = None
@@ -147,6 +149,70 @@ class WindowsMouseTests(unittest.TestCase):
         self.mouse._send_input.assert_called_once()
         events = self.mouse._send_input.call_args.args[1]
         self.assertEqual([event.mi.dwFlags for event in events], [0x0008, 0x0010])
+
+    def test_f8_held_during_layout_check_blocks_active_move_and_click(self):
+        self.mouse.begin_control()
+        self.fake_cursor(-629, 325)
+        expected = self.mouse.position()
+        displays = self.mouse._monitor_rectangles.return_value
+        held = False
+        self.mouse._key_state.side_effect = lambda key: -32768 if held and key == 0x77 else 0
+
+        def enumerate_after_f8():
+            nonlocal held
+            held = True
+            return displays
+
+        self.mouse._monitor_rectangles.side_effect = enumerate_after_f8
+        actions = {"move": lambda: self.mouse.move(0.5, 0.5),
+                   "click": lambda: self.mouse.click("left", expected_position=expected)}
+        for name, dispatch in actions.items():
+            with self.subTest(action=name):
+                held = False
+                self.assertFalse(self.mouse.emergency_requested())
+                with self.assertRaises(EmergencyPauseRequested):
+                    dispatch()
+                self.mouse._set_cursor_pos.assert_not_called()
+                self.mouse._send_input.assert_not_called()
+
+    def test_f8_guard_applies_only_while_control_is_reserved(self):
+        self.mouse._key_state.return_value = -32768
+        self.mouse.move(0.5, 0.5)
+        self.mouse.click("left")
+        self.mouse._key_state.assert_not_called()
+        self.mouse._set_cursor_pos.assert_called_once()
+        self.mouse._send_input.assert_called_once()
+
+    def test_click_checks_f8_after_the_physical_buttons(self):
+        self.mouse.begin_control()
+        self.fake_cursor(-629, 325)
+        expected = self.mouse.position()
+        held = False
+
+        def key_state(key):
+            nonlocal held
+            if key == 0x06:
+                held = True
+            return -32768 if held and key == 0x77 else 0
+
+        self.mouse._key_state.side_effect = key_state
+        with self.assertRaises(EmergencyPauseRequested):
+            self.mouse.click("left", expected_position=expected)
+        self.mouse._send_input.assert_not_called()
+
+    def test_partial_click_releases_the_button_even_if_f8_becomes_held(self):
+        self.mouse.begin_control()
+
+        def send_input(_count, _events, _size):
+            self.mouse._key_state.return_value = -32768
+            return 1
+
+        self.mouse._send_input.side_effect = send_input
+        self.mouse.click("left")
+        dispatch, release = [entry.args for entry in self.mouse._send_input.call_args_list]
+        self.assertEqual([dispatch[0], release[0]], [2, 1])
+        self.assertEqual(release[1][0].mi.dwFlags, 0x0004)
+        self.mouse._key_state.assert_called_once_with(0x77)
 
     def test_layout_order_is_irrelevant_but_same_bounds_can_have_a_different_layout(self):
         displays = [(0, 0, 100, 100), (100, 0, 200, 100)]

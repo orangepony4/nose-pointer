@@ -6,7 +6,9 @@ from unittest.mock import Mock, call, patch
 import camera
 from nose_pointer import DWELL_MODE, MOTION_MODE, WINK_MODE, PointerApp
 from tracking import FaceSample, Settings
-from windows_mouse import ControlSessionBusy, DisplayLayoutChanged, PointerMoved, WindowsMouse
+from windows_mouse import (
+    ControlSessionBusy, DisplayLayoutChanged, EmergencyPauseRequested, PointerMoved, WindowsMouse,
+)
 
 
 OPEN_FACE = FaceSample(0.50, 0.50, 0.1, 0.1)
@@ -863,8 +865,10 @@ class PreviewTests(unittest.TestCase):
     def test_dwell_uses_visible_motion_near_a_display_gap(self):
         displays = ((0, 0, 100, 100), (100, 0, 200, 200))
         adapter = object.__new__(WindowsMouse)
+        adapter._control_lease = object()
         adapter._control_layout = displays
         adapter._monitor_rectangles = Mock(return_value=displays)
+        adapter._key_state = Mock(return_value=0)
         self.mouse.position.return_value = (120 / 199, 150 / 199)
         self.enterContext(patch("windows_mouse.ctypes.set_last_error", create=True))
 
@@ -1396,6 +1400,31 @@ class PreviewTests(unittest.TestCase):
         recenter.assert_not_called()
         self.assertFalse(self.app.active)
         self.assert_no_system_input()
+
+    def test_emergency_pause_at_dispatch_releases_control_in_each_mode(self):
+        scenarios = {
+            WINK_MODE: ((0.80, LEFT_WINK), (0.92, LEFT_WINK), (1.08, OPEN_FACE)),
+            DWELL_MODE: tuple((now, MOVED_FACE) for now in (0.80, 0.96, 1.12, 1.28, 1.42)),
+            MOTION_MODE: ((0.80, MOVED_FACE),),
+        }
+        for mode, samples in scenarios.items():
+            with self.subTest(mode=mode):
+                if mode == DWELL_MODE:
+                    self.select_quick_dwell()
+                else:
+                    self.app.click_mode.set(self.app.text(mode))
+                    self.app.change_click_mode()
+                self.arm_system_pointer()
+                action = "move" if mode == MOTION_MODE else "click"
+                with patch.object(self.mouse, action, side_effect=EmergencyPauseRequested) as dispatch:
+                    for now, sample in samples:
+                        self.feed(now, sample)
+                dispatch.assert_called_once()
+                self.assertFalse(self.app.active)
+                self.assertFalse(self.app.can_enable)
+                self.assertEqual(self.app.mode.get(), self.app.text("mode_preview"))
+                self.assertEqual(self.app.status.get(), self.app.text("status_paused"))
+                self.mouse.end_control.assert_called_once_with()
 
     def test_short_wink_with_slow_reopening_does_not_send_system_input(self):
         self.arm_system_pointer()

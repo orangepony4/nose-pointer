@@ -11,7 +11,9 @@ from camera import AMBIGUOUS_FACE, Camera, CameraError, check_inference, downloa
 from i18n import LANGUAGES, load_language, save_language, translate
 from preferences import load_text_preference, save_preference
 from tracking import Settings, Tracker
-from windows_mouse import ControlSessionBusy, DisplayLayoutChanged, MouseButtonHeld, PointerMoved
+from windows_mouse import (
+    ControlSessionBusy, DisplayLayoutChanged, EmergencyPauseRequested, MouseButtonHeld, PointerMoved,
+)
 
 
 BACKGROUND = "#f7f5ef"
@@ -918,6 +920,8 @@ class PointerApp:
                                 self.recovery_pending = True
                         self.last_frame = captured_at
                         self.update_tracking(captured_at, sample)
+                except EmergencyPauseRequested:
+                    self.pause()
                 except DisplayLayoutChanged:
                     self.pause_for_safety("safety_display_changed")
                 except PointerMoved:
