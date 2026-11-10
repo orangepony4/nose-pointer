@@ -11,7 +11,7 @@ from camera import AMBIGUOUS_FACE, Camera, CameraError, check_inference, downloa
 from i18n import LANGUAGES, load_language, save_language, translate
 from preferences import load_text_preference, save_preference
 from tracking import Settings, Tracker
-from windows_mouse import ControlSessionBusy, DisplayLayoutChanged
+from windows_mouse import ControlSessionBusy, DisplayLayoutChanged, MouseButtonHeld, PointerMoved
 
 
 BACKGROUND = "#f7f5ef"
@@ -836,7 +836,7 @@ class PointerApp:
             elif self.args.swap_buttons and self.settings.dwell_seconds is None:
                 button = "right" if button == "left" else "left"
             if system_click:
-                self.mouse.click(button)
+                self.mouse.click(button, expected_position=self.last_applied_position)
             mode = "active" if self.active else "preview"
             self.set_message("last_gesture", f"gesture_{mode}_{button}")
 
@@ -885,6 +885,10 @@ class PointerApp:
                         self.update_tracking(captured_at, sample)
                 except DisplayLayoutChanged:
                     self.pause_for_safety("safety_display_changed")
+                except PointerMoved:
+                    self.pause_for_safety("safety_pointer_moved")
+                except MouseButtonHeld:
+                    self.pause_for_safety("safety_mouse_button")
                 except OSError as error:
                     self.stop_on_input_error(error)
         self.root.after(16, self.poll)

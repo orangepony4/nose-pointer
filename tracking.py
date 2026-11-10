@@ -129,6 +129,7 @@ class Tracker:
         self._wink_start = 0.0
         self._wink_seen_again = False
         self._wink_reopening_at: float | None = None
+        self._wink_reopening_confirmed = False
         self.reset_dwell()
 
     def update(
@@ -281,12 +282,18 @@ class Tracker:
             self._open_since = now
             return self._hold("rearming", click)
 
+        # Allow one intermediate observation to be score jitter. Once partial
+        # reopening is confirmed, a new closure cannot extend the old one.
+        if self._wink_reopening_confirmed:
+            return self._hold("wink")
         if wink_score >= settings.closed_threshold:
             if now > self._wink_start:
                 self._wink_seen_again = True
             self._wink_reopening_at = None
         elif self._wink_reopening_at is None:
             self._wink_reopening_at = now
+        elif now > self._wink_reopening_at:
+            self._wink_reopening_confirmed = True
         return self._hold("wink")
 
     def _advance_dwell(

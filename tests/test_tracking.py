@@ -123,6 +123,17 @@ class TrackingTests(unittest.TestCase):
             "transient uncertainty followed by clear closure": (
                 [(0.125, 0.9), (0.1875, 0.9), (0.25, 0.5), (0.3125, 0.9), (0.375, 0.1)], True
             ),
+            "two short closures separated by a sustained partial reopening": (
+                [(0.125, 0.9), (0.1875, 0.9), (0.25, 0.5), (0.3125, 0.5),
+                 (0.375, 0.9), (0.4375, 0.9), (0.5, 0.1)], False
+            ),
+            "valid closure before a sustained partial reopening": (
+                [(0.125, 0.9), (0.25, 0.9), (0.375, 0.5), (0.4375, 0.5),
+                 (0.5, 0.9), (0.5625, 0.1)], True
+            ),
+            "reclosure cannot confirm an isolated initial closure": (
+                [(0.125, 0.9), (0.375, 0.5), (0.4375, 0.5), (0.5, 0.9), (0.5625, 0.1)], False
+            ),
             "reopening still incomplete after maximum": (
                 [(0.125, 0.9), (0.25, 0.9), (0.375, 0.5), (0.5625, 0.5),
                  (0.75, 0.5), (0.9375, 0.5), (1.0, 0.1)], False

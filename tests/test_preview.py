@@ -6,7 +6,7 @@ from unittest.mock import Mock, call, patch
 import camera
 from nose_pointer import DWELL_MODE, MOTION_MODE, WINK_MODE, PointerApp
 from tracking import FaceSample, Settings
-from windows_mouse import ControlSessionBusy, DisplayLayoutChanged
+from windows_mouse import ControlSessionBusy, DisplayLayoutChanged, PointerMoved
 
 
 OPEN_FACE = FaceSample(0.50, 0.50, 0.1, 0.1)
@@ -656,7 +656,7 @@ class PreviewTests(unittest.TestCase):
         self.calibrate(2.1)
         for time in (2.5, 2.7, 2.9, 3.1, 3.3, 3.5, 3.72, 3.9):
             self.feed(time, MOVED_FACE)
-        self.mouse.click.assert_called_once_with("left")
+        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
         self.app.pause()
         self.app.mode_picker.configure.assert_called_with(state="readonly")
         self.app.delay_picker.configure.assert_called_with(state="readonly")
@@ -715,12 +715,16 @@ class PreviewTests(unittest.TestCase):
         self.feed(0.8)
         for time in (0.9, 1.08, 1.26, 1.44, 1.52, 1.7):
             self.feed(time, MOVED_FACE)
-        self.mouse.click.assert_called_once_with("right")
+        right_target = self.app.last_applied_position
+        self.mouse.click.assert_called_once_with("right", expected_position=right_target)
         self.assertIsNone(self.app.right_dwell_armed_at)
 
         for time in (1.8, 1.98, 2.16, 2.34, 2.42):
             self.feed(time)
-        self.assertEqual(self.mouse.click.call_args_list, [call("right"), call("left")])
+        self.assertEqual(self.mouse.click.call_args_list, [
+            call("right", expected_position=right_target),
+            call("left", expected_position=self.app.last_applied_position),
+        ])
         self.assertEqual(self.mouse.position.call_count, 4)
 
     def test_unpolled_invalid_camera_sample_clears_a_pending_right_dwell(self):
@@ -865,7 +869,19 @@ class PreviewTests(unittest.TestCase):
         self.assertTrue(self.app.active)
         self.mouse.position.assert_called_once()
         self.mouse.move.assert_called_once()
-        self.mouse.click.assert_called_once_with("left")
+        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
+
+    def test_pointer_movement_detected_at_dispatch_pauses_system_control(self):
+        self.arm_system_pointer()
+        target = self.app.last_applied_position
+        self.mouse.click.side_effect = PointerMoved
+        for now in (0.80, 0.92):
+            self.feed(now, LEFT_WINK)
+        self.feed(1.08)
+        self.mouse.click.assert_called_once_with("left", expected_position=target)
+        self.assertFalse(self.app.active)
+        self.assertEqual(self.app.safety_notice, "safety_pointer_moved")
+        self.mouse.end_control.assert_called_once()
 
     def test_cursor_read_failure_at_click_disarms_without_input(self):
         self.arm_system_pointer()
@@ -1079,7 +1095,7 @@ class PreviewTests(unittest.TestCase):
         self.feed(1.73, LEFT_WINK)
         self.feed(1.84, LEFT_WINK)
         self.feed(2.00)
-        self.mouse.click.assert_called_once_with("left")
+        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position)
 
     def test_recovery_after_loss_keeps_an_externally_moved_cursor_in_place(self):
         self.arm_system_pointer()

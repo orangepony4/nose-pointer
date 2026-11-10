@@ -127,6 +127,14 @@ class ControlSessionBusy(OSError):
     """Another Nose Pointer instance holds the Windows session lease."""
 
 
+class PointerMoved(OSError):
+    """The pointer moved before an automatic click could be sent."""
+
+
+class MouseButtonHeld(OSError):
+    """A physical mouse button is down before an automatic click."""
+
+
 class WindowsMouse:
     """Read, move and click the cursor in the active Windows desktop."""
 
@@ -244,12 +252,10 @@ class WindowsMouse:
             raise _input_error("SetCursorPos could not move the cursor", ctypes.get_last_error())
         return self._normalize_position(target_x, target_y, bounds)
 
-    def click(self, button: str) -> None:
-        """Send a down/up pair without leaving a deliberately held button."""
+    def click(self, button: str, *, expected_position: tuple[float, float] | None = None) -> None:
+        """Send a down/up pair, checking the target again at dispatch when supplied."""
         if button not in _BUTTON_FLAGS:
             raise ValueError("Mouse button must be 'left' or 'right'.")
-        if self._control_layout is not None:
-            self._checked_layout()
 
         events = (_Input * 2)()
         for event, flag in zip(events, _BUTTON_FLAGS[button]):
@@ -257,6 +263,13 @@ class WindowsMouse:
             event.mi.dwFlags = flag
 
         event_size = ctypes.sizeof(_Input)
+        if expected_position is not None:
+            if self.position() != expected_position:
+                raise PointerMoved
+            if self.button_held():
+                raise MouseButtonHeld
+        elif self._control_layout is not None:
+            self._checked_layout()
         ctypes.set_last_error(0)
         inserted = self._send_input(2, events, event_size)
         if inserted == 2:
