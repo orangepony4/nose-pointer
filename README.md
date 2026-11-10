@@ -78,14 +78,21 @@ uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-
 
 Nose Pointer uses Python, Tkinter, OpenCV, [MediaPipe Face Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker/python), and Windows input APIs. Camera frames stay in memory on your computer for local processing. This is an early prototype. Recognition depends on your camera, lighting, and range of motion, so try the practice area before enabling system control.
 
-After setup, these commands check the app while the webcam stays off.
+To verify your installation with the webcam off, open PowerShell in the extracted folder and run the Windows launcher in check mode. The first run uses the same setup as double-clicking the launcher, so it needs internet access.
+
+```powershell
+& '.\Start Nose Pointer.cmd' --check --lang en
+```
+
+`--check` converts a blank frame with OpenCV and passes it to the same local model used for webcam frames. A successful check prints `Model check passed. The camera stayed off.`
+
+If you already have uv on PATH, you can also run the unit tests. They use synthetic face samples and mocked system input.
 
 ```powershell
 uv run --locked python -m unittest discover -s tests -v
-uv run --locked nose_pointer.py --check
 ```
 
-The tests use synthetic face samples and mocked system input. With the camera off, `--check` converts a blank frame with OpenCV and passes it to the same local model used for webcam frames. See the [MIT license](LICENSE).
+See the [MIT license](LICENSE).
 
 ## Русский
 
@@ -165,11 +172,18 @@ uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-
 
 Приложение использует Python, Tkinter, OpenCV, [MediaPipe Face Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker/python) и системный ввод Windows. Кадры обрабатываются локально и остаются в оперативной памяти компьютера. Это ранний прототип. На распознавание влияют камера, освещение и доступная амплитуда движений, поэтому сначала попробуйте управление в тестовом поле.
 
-После установки эти команды проверяют работу приложения при выключенной камере.
+Чтобы проверить установку с выключенной камерой, откройте PowerShell в распакованной папке и запустите программу в режиме проверки. При первом запуске выполняется та же установка, что и при двойном щелчке по файлу запуска, поэтому нужен интернет.
+
+```powershell
+& '.\Start Nose Pointer.cmd' --check --lang ru
+```
+
+`--check` преобразует пустой кадр с помощью OpenCV и передаёт его в ту же локальную модель, которая обрабатывает кадры веб-камеры. При успехе появится сообщение `Модель и обработка кадров работают. Камера оставалась выключенной.`
+
+Если uv уже доступен в PATH, можно запустить тесты. Они используют синтетические данные о лице и заглушки системного ввода.
 
 ```powershell
 uv run --locked python -m unittest discover -s tests -v
-uv run --locked nose_pointer.py --check
 ```
 
-В тестах используются синтетические данные о лице и заглушки системного ввода. При выключенной камере `--check` преобразует пустой кадр с помощью OpenCV и передаёт его в ту же локальную модель, которая обрабатывает кадры веб-камеры. См. [лицензию MIT](LICENSE).
+См. [лицензию MIT](LICENSE).
