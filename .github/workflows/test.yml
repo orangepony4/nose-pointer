@@ -26,12 +26,7 @@ jobs:
         run: python -m compileall -q camera.py nose_pointer.py tracking.py windows_mouse.py
       - name: Test tracking without camera hardware
         run: python -m unittest discover -s tests -v
-      - name: Install uv
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
-        with:
-          version: '0.13.1'
-          enable-cache: false
-      - name: Check the Windows launcher from a folder with Cyrillic and spaces
+      - name: Check first launch without uv on PATH from a folder with Cyrillic and spaces
         shell: pwsh
         env:
           PYTHONUTF8: '1'
@@ -42,5 +37,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Expand-Archive -LiteralPath $archive -DestinationPath $destination
           Set-Location -LiteralPath $destination
+          $env:Path = "$env:SystemRoot\System32;$env:SystemRoot"
           & './Start Nose Pointer.cmd' --check --lang en
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path -LiteralPath './.uv-bootstrap/uv.exe' -PathType Leaf)) {
+            throw 'The launcher did not prepare its own verified copy of uv.'
+          }
+          $env:UV_OFFLINE = 'true'
+          $env:HTTP_PROXY = $env:HTTPS_PROXY = $env:ALL_PROXY = 'http://127.0.0.1:9'
+          $env:NO_PROXY = ''
+          & './Start Nose Pointer.cmd' --check --lang ru
           exit $LASTEXITCODE

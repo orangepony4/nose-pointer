@@ -1,4 +1,5 @@
 .venv/
+.uv-bootstrap/
 __pycache__/
 *.py[cod]
 /models/

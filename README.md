@@ -4,15 +4,15 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.9.12)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.12.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.12)
+**[Download the Windows ZIP (v0.9.13)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.13.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.13)
 
 ## English
 
 ### Install on Windows
 
-You need Windows 10 or 11 (x64), a webcam, and [uv](https://docs.astral.sh/uv/getting-started/installation/). Extract the ZIP and double-click **Start Nose Pointer.cmd**. The first run needs internet access to set up Python 3.12, the pinned dependencies, and the MediaPipe model. The launcher verifies the model with SHA-256. Camera tracking runs locally after setup.
+You need Windows 10 or 11 (x64) and a webcam. Extract the ZIP to a writable folder and double-click **Start Nose Pointer.cmd**. On the first run, the launcher uses uv from PATH or downloads a verified copy from [Astral's releases](https://github.com/astral-sh/uv/releases/tag/0.13.1) into `.uv-bootstrap` inside the extracted folder. It then sets up Python 3.12 and the pinned dependencies and verifies the downloaded MediaPipe model. Setup needs internet access. Camera tracking runs locally after setup.
 
-To install and launch from PowerShell, run these commands in the extracted folder.
+If you already have [uv](https://docs.astral.sh/uv/getting-started/installation/) on PATH, you can also run these commands from the extracted folder in PowerShell.
 
 ```powershell
 uv sync --locked --python 3.12
@@ -91,13 +91,13 @@ The tests use synthetic face samples and mocked system input. The model check pr
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.9.12)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.12.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.12)
+**[Скачать ZIP для Windows (v0.9.13)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.13.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.13)
 
 ### Запуск на Windows
 
-Нужны 64-битная Windows 10 или 11 (x64), веб-камера и [uv](https://docs.astral.sh/uv/getting-started/installation/). Распакуйте архив и откройте **Start Nose Pointer.cmd**. Для первого запуска нужен интернет. Программа установит Python 3.12 и зафиксированные зависимости, скачает модель MediaPipe и проверит её SHA-256. После настройки распознавание работает локально.
+Нужны 64-битная Windows 10 или 11 (x64) и веб-камера. Распакуйте архив в папку с правом записи и откройте **Start Nose Pointer.cmd**. При первом запуске программа использует установленный uv или скачивает проверенную копию из [релизов Astral](https://github.com/astral-sh/uv/releases/tag/0.13.1) в папку `.uv-bootstrap` внутри распакованного архива. Затем программа настраивает Python 3.12 и зафиксированные зависимости и проверяет скачанную модель MediaPipe. Для настройки нужен интернет. После неё распознавание работает локально.
 
-Для запуска из PowerShell выполните эти команды в распакованной папке.
+Если [uv](https://docs.astral.sh/uv/getting-started/installation/) уже доступен через PATH, можно выполнить эти команды из распакованной папки в PowerShell.
 
 ```powershell
 uv sync --locked --python 3.12
