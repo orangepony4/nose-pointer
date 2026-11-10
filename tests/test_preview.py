@@ -6,7 +6,7 @@ from unittest.mock import Mock, call, patch
 import camera
 from nose_pointer import DWELL_MODE, MOTION_MODE, WINK_MODE, PointerApp
 from tracking import FaceSample, Settings
-from windows_mouse import DisplayLayoutChanged
+from windows_mouse import ControlSessionBusy, DisplayLayoutChanged
 
 
 OPEN_FACE = FaceSample(0.50, 0.50, 0.1, 0.1)
@@ -905,6 +905,82 @@ class PreviewTests(unittest.TestCase):
         self.assertFalse(self.app.active)
         self.assert_no_system_input()
         self.assertIn("No active display", self.app.last_gesture.get())
+
+    def test_busy_session_keeps_camera_in_practice_until_explicit_retry(self):
+        self.arm_system_pointer()
+        other_root = Mock()
+        other_root.winfo_fpixels.return_value = 96
+        other_root.winfo_screenwidth.return_value = 1920
+        other_root.winfo_screenheight.return_value = 1080
+        with patch.object(self, "root", other_root):
+            other = self.create_app(self.app.settings)
+        other.mouse = Mock()
+        other.mouse.emergency_requested.return_value = False
+        other.mouse.recenter_requested.return_value = False
+
+        def begin_other_control():
+            if self.app.active:
+                raise ControlSessionBusy
+
+        other.mouse.begin_control.side_effect = begin_other_control
+        other_camera = Mock()
+        with patch("nose_pointer.Camera", return_value=other_camera):
+            other.toggle_camera()
+        other_camera.start.assert_called_once_with()
+        for now in (1, 1.1, 1.2, 1.31):
+            other.update_tracking(now, OPEN_FACE)
+        self.clock.return_value = 1.32
+        other.toggle_pointer()
+
+        self.assertTrue(self.app.active)
+        self.assertFalse(other.active)
+        self.assertEqual(other.safety_notice, "safety_control_busy")
+        self.assertIn("Another Nose Pointer window", other.status.get())
+        other_camera.stop.assert_not_called()
+        other.mouse.end_control.assert_not_called()
+        other.mouse.move.assert_not_called()
+        other.mouse.click.assert_not_called()
+
+        self.app.pause()
+        self.mouse.end_control.assert_called_once_with()
+        for now in (1.4, 1.5, 1.6, 1.71):
+            other.update_tracking(now, OPEN_FACE)
+        self.assertTrue(other.can_enable)
+        self.assertFalse(other.active)
+        self.clock.return_value = 1.72
+        other.toggle_pointer()
+        self.assertTrue(other.active)
+        other.mouse.move.assert_not_called()
+        other.mouse.click.assert_not_called()
+
+    def test_activation_error_releases_acquired_session_without_sending_input(self):
+        self.calibrate(0)
+        with patch.object(self.app, "recenter", side_effect=RuntimeError("Setup failed")):
+            with self.assertRaisesRegex(RuntimeError, "Setup failed"):
+                self.app.toggle_pointer()
+        self.mouse.begin_control.assert_called_once_with()
+        self.mouse.end_control.assert_called_once_with()
+        self.assertFalse(self.app.active)
+        self.assertIsNone(self.app.last_active_face_at)
+        self.assert_no_system_input()
+
+    def test_closing_active_window_releases_session_before_stopping_camera(self):
+        self.arm_system_pointer()
+        events = Mock()
+        events.attach_mock(self.mouse.end_control, "release")
+        events.attach_mock(self.camera.stop, "stop")
+        self.app.close()
+        self.assertEqual(events.mock_calls, [call.release(), call.stop()])
+        self.root.destroy.assert_called_once_with()
+        self.assertFalse(self.app.active)
+
+    def test_stopping_active_camera_releases_session(self):
+        self.arm_system_pointer()
+        self.app.toggle_camera()
+        self.camera.stop.assert_called_once_with()
+        self.mouse.end_control.assert_called_once_with()
+        self.assertFalse(self.app.active)
+        self.assert_no_system_input()
 
     def test_right_dwell_is_cleared_by_explicit_cancel_loss_gap_and_pause(self):
         self.select_quick_dwell()

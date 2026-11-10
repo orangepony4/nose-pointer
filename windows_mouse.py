@@ -16,9 +16,11 @@ _VK_F8 = 0x77
 _VK_F9 = 0x78
 _KEY_IS_DOWN = 0x8000
 _ERROR_ACCESS_DENIED = 5
+_ERROR_ALREADY_EXISTS = 183
 _E_ACCESSDENIED = 0x80070005
 _DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
 _PROCESS_PER_MONITOR_DPI_AWARE = 2
+_CONTROL_MUTEX_NAME = r"Local\NosePointer.PointerControl"
 
 _INPUT_MOUSE = 0
 _BUTTON_FLAGS = {
@@ -121,6 +123,10 @@ class DisplayLayoutChanged(OSError):
     """The monitor rectangles no longer match the start of system control."""
 
 
+class ControlSessionBusy(OSError):
+    """Another Nose Pointer instance holds the Windows session lease."""
+
+
 class WindowsMouse:
     """Read, move and click the cursor in the active Windows desktop."""
 
@@ -142,13 +148,35 @@ class WindowsMouse:
             user32, "SendInput", wintypes.UINT, wintypes.UINT, ctypes.POINTER(_Input), ctypes.c_int
         )
         self._key_state = _bind(user32, "GetAsyncKeyState", wintypes.SHORT, ctypes.c_int)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self._create_mutex = _bind(
+            kernel32, "CreateMutexW", wintypes.HANDLE, ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR
+        )
+        self._close_handle = _bind(kernel32, "CloseHandle", wintypes.BOOL, wintypes.HANDLE)
+        self._control_lease = None
         self._control_layout = None
 
     def begin_control(self):
-        self._control_layout = tuple(sorted(self._monitor_rectangles()))
+        if self._control_lease is not None:
+            return
+        layout = tuple(sorted(self._monitor_rectangles()))
+        # The object exists only while a handle is open. No thread owns the mutex.
+        ctypes.set_last_error(0)
+        handle = self._create_mutex(None, False, _CONTROL_MUTEX_NAME)
+        error = ctypes.get_last_error()
+        if not handle:
+            raise _input_error("CreateMutexW could not reserve mouse control", error)
+        if error == _ERROR_ALREADY_EXISTS:
+            self._close_handle(handle)
+            raise ControlSessionBusy
+        self._control_lease = handle
+        self._control_layout = layout
 
     def end_control(self):
+        handle, self._control_lease = self._control_lease, None
         self._control_layout = None
+        if handle is not None:
+            self._close_handle(handle)
 
     def _checked_layout(self):
         rectangles = self._monitor_rectangles()

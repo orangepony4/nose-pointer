@@ -11,7 +11,7 @@ from camera import AMBIGUOUS_FACE, Camera, CameraError, check_inference, downloa
 from i18n import LANGUAGES, load_language, save_language, translate
 from preferences import load_text_preference, save_preference
 from tracking import Settings, Tracker
-from windows_mouse import DisplayLayoutChanged
+from windows_mouse import ControlSessionBusy, DisplayLayoutChanged
 
 
 BACKGROUND = "#f7f5ef"
@@ -681,21 +681,28 @@ class PointerApp:
             return
         try:
             self.mouse.begin_control()
+        except ControlSessionBusy:
+            self.pause_for_safety("safety_control_busy")
+            return
         except OSError as error:
             self.stop_on_input_error(error)
             return
-        self.safety_notice = ""
-        self.set_footer_notice()
-        self.recenter_held = self.mouse.recenter_requested()
-        self.last_active_face_at = now
         self.active = True
-        self.language_picker.configure(state="disabled")
-        self.sensitivity_picker.configure(state="disabled")
-        self.mode_picker.configure(state="disabled")
-        self.delay_picker.configure(state="disabled")
-        self.set_message("mode", "mode_active")
-        self.set_button("pointer_button", "pause")
-        self.recenter()
+        try:
+            self.safety_notice = ""
+            self.set_footer_notice()
+            self.recenter_held = self.mouse.recenter_requested()
+            self.last_active_face_at = now
+            self.language_picker.configure(state="disabled")
+            self.sensitivity_picker.configure(state="disabled")
+            self.mode_picker.configure(state="disabled")
+            self.delay_picker.configure(state="disabled")
+            self.set_message("mode", "mode_active")
+            self.set_button("pointer_button", "pause")
+            self.recenter()
+        except Exception:
+            self._release_system_control()
+            raise
 
     def request_recenter(self, _event=None):
         if not self.active or self.recenter_held:
@@ -726,11 +733,15 @@ class PointerApp:
         elif self.right_dwell_armed_at is not None:
             self.toggle_right_dwell()
 
-    def disable_input(self):
-        if self.active:
-            self.mouse.end_control()
+    def _release_system_control(self):
+        was_active = self.active
         self.active = False
         self.last_active_face_at = None
+        if was_active:
+            self.mouse.end_control()
+
+    def disable_input(self):
+        self._release_system_control()
         self.reset_calibration()
         self.language_picker.configure(state="readonly")
         self.sensitivity_picker.configure(state="readonly")
@@ -879,7 +890,7 @@ class PointerApp:
         self.root.after(16, self.poll)
 
     def close(self):
-        self.active = False
+        self._release_system_control()
         if self.camera:
             self.camera.stop()
         self.root.destroy()

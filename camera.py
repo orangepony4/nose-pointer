@@ -61,13 +61,15 @@ def download_model():
         raise CameraError("model_verify_failed")
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with NamedTemporaryFile(dir=MODEL_PATH.parent, delete=False) as temp:
-        temp_path = Path(temp.name)
-        temp.write(data)
+    temp_path = None
     try:
+        with NamedTemporaryFile(dir=MODEL_PATH.parent, delete=False) as temp:
+            temp_path = Path(temp.name)
+            temp.write(data)
         temp_path.replace(MODEL_PATH)
     finally:
-        temp_path.unlink(missing_ok=True)
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
 
 def create_landmarker(mp):

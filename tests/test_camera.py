@@ -6,7 +6,9 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, call, patch
 
-from camera import AMBIGUOUS_FACE, Camera, CameraError, create_landmarker, extract_sample, model_is_ready
+from camera import (
+    AMBIGUOUS_FACE, Camera, CameraError, create_landmarker, download_model, extract_sample, model_is_ready,
+)
 from tracking import FaceSample
 
 
@@ -29,6 +31,37 @@ def result(landmarks, blendshapes):
 
 
 class CameraTests(unittest.TestCase):
+    def test_interrupted_model_write_cleans_staging_and_allows_retry(self):
+        model = b"synthetic verified model"
+        response = Mock()
+        response.read.return_value = model
+        with TemporaryDirectory() as folder:
+            model_path = Path(folder, "face_landmarker.task")
+            model_path.write_bytes(b"old")
+            partial = Path(folder, "staging.task")
+            temp = Mock()
+            temp.name = str(partial)
+
+            def interrupted_write(data):
+                partial.write_bytes(data[:3])
+                raise OSError("disk full")
+
+            temp.write.side_effect = interrupted_write
+            with (
+                patch.multiple("camera", MODEL_PATH=model_path, MODEL_SIZE=len(model),
+                               MODEL_SHA256=sha256(model).hexdigest()),
+                patch("camera.urlopen", return_value=nullcontext(response)),
+            ):
+                with patch("camera.NamedTemporaryFile", return_value=nullcontext(temp)):
+                    with self.assertRaisesRegex(OSError, "disk full"):
+                        download_model()
+                self.assertEqual(list(Path(folder).iterdir()), [model_path])
+                self.assertEqual(model_path.read_bytes(), b"old")
+
+                download_model()
+                self.assertTrue(model_is_ready())
+                self.assertEqual(list(Path(folder).iterdir()), [model_path])
+
     def fake_capture(self, opened=True):
         capture = Mock()
         capture.isOpened.return_value = opened

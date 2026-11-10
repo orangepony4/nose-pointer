@@ -88,6 +88,10 @@ MESSAGES = {
         "Display layout changed. Enable mouse again after calibration.",
         "Расположение экранов изменилось. Снова включите мышь после калибровки.",
     ),
+    "safety_control_busy": (
+        "Another Nose Pointer window has mouse control. Pause it before enabling control here.",
+        "Мышью управляет другое окно Nose Pointer. Поставьте его на паузу, затем включите управление здесь.",
+    ),
     "safety_jump_brief": ("Face moved suddenly.", "Лицо резко сместилось."),
     "safety_loss_brief": ("Face out of view too long.", "Лицо долго не было видно."),
     "safety_stale_preview_brief": ("Camera frames were delayed.", "Кадры задержались."),
@@ -95,6 +99,7 @@ MESSAGES = {
     "safety_pointer_moved_brief": ("Click cancelled because the pointer moved.", "Клик отменён. Указатель переместился."),
     "safety_mouse_button_brief": ("Click cancelled. A mouse button is held.", "Клик отменён. Кнопка мыши удерживается."),
     "safety_display_changed_brief": ("Display layout changed.", "Расположение экранов изменилось."),
+    "safety_control_busy_brief": ("Another window has mouse control.", "Мышью управляет другое окно."),
     "instruction_wink": ("Wink with one eye, then reopen it.", "Подмигните одним глазом и откройте его."),
     "instruction_motion": ("Move the dot with your nose. Clicks are disabled.", "Двигайте точку носом. Клики отключены."),
     "instruction_dwell": ("Move the pointer, then hold it still to left-click.", "Переместите точку, затем задержитесь для левого клика."),

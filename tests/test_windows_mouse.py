@@ -3,7 +3,7 @@ from ctypes import wintypes
 import unittest
 from unittest.mock import Mock, call, patch
 
-from windows_mouse import DisplayLayoutChanged, WindowsMouse
+from windows_mouse import ControlSessionBusy, DisplayLayoutChanged, WindowsMouse
 
 
 class WindowsMouseTests(unittest.TestCase):
@@ -18,8 +18,12 @@ class WindowsMouseTests(unittest.TestCase):
         self.mouse._set_cursor_pos = Mock(return_value=True)
         self.mouse._send_input = Mock(return_value=2)
         self.mouse._key_state = Mock()
+        self.mouse._create_mutex = Mock(return_value=1)
+        self.mouse._close_handle = Mock(return_value=True)
+        self.mouse._control_lease = None
         self.mouse.end_control()
         self.enterContext(patch.object(ctypes, "set_last_error", create=True))
+        self.last_error = self.enterContext(patch.object(ctypes, "get_last_error", return_value=0, create=True))
 
     def fake_cursor(self, x, y):
         def get_cursor(pointer):
@@ -103,6 +107,64 @@ class WindowsMouseTests(unittest.TestCase):
         with self.assertRaises(DisplayLayoutChanged):
             self.mouse.move(1, 1)
         self.mouse._set_cursor_pos.assert_not_called()
+
+    def test_session_lease_blocks_a_second_controller_until_pause_or_process_exit(self):
+        handles = {}
+
+        def create_mutex(attributes, initial_owner, name):
+            self.assertIsNone(attributes)
+            self.assertFalse(initial_owner)
+            self.assertTrue(name.startswith("Local\\"))
+            self.last_error.return_value = 183 if name in handles.values() else 0
+            handle = object()
+            handles[handle] = name
+            return handle
+
+        def close_handle(handle):
+            del handles[handle]
+            return True
+
+        first = self.mouse
+        second = object.__new__(WindowsMouse)
+        second._monitor_rectangles = first._monitor_rectangles
+        second._control_lease = second._control_layout = None
+        for adapter in (first, second):
+            adapter._create_mutex = Mock(side_effect=create_mutex)
+            adapter._close_handle = Mock(side_effect=close_handle)
+
+        first.begin_control()
+        first.begin_control()
+        first._create_mutex.assert_called_once()
+        with self.assertRaises(ControlSessionBusy):
+            second.begin_control()
+        second._close_handle.assert_called_once()
+        self.assertIsNone(second._control_lease)
+        self.assertEqual(len(handles), 1)
+
+        first.end_control()
+        first.end_control()
+        first._close_handle.assert_called_once()
+        second.begin_control()
+        self.assertEqual(len(handles), 1)
+        # The kernel drops the second process's handle when that process exits.
+        close_handle(second._control_lease)
+        first.begin_control()
+        self.assertEqual(len(handles), 1)
+        first.end_control()
+        self.assertEqual(handles, {})
+
+    def test_failed_control_start_leaves_no_session_lease(self):
+        self.mouse._monitor_rectangles.side_effect = OSError("No active display")
+        with self.assertRaisesRegex(OSError, "No active display"):
+            self.mouse.begin_control()
+        self.mouse._create_mutex.assert_not_called()
+        self.mouse._monitor_rectangles.side_effect = None
+        self.mouse._create_mutex.return_value = None
+        with self.assertRaisesRegex(OSError, "CreateMutexW"):
+            self.mouse.begin_control()
+        self.mouse.end_control()
+        self.mouse._close_handle.assert_not_called()
+        self.assertIsNone(self.mouse._control_layout)
 
     def test_recenter_requested_checks_only_f9_key_down_bit(self):
         self.mouse._key_state.side_effect = [0, 1, -32768, -32767]
