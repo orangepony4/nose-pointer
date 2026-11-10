@@ -120,6 +120,8 @@ class Camera:
             return self.latest, self.error
 
     def publish(self, captured_at, sample):
+        if isinstance(sample, FaceSample) and not sample.is_valid:
+            sample = None
         with self.lock:
             self.latest = captured_at, sample
             # A fast next frame must not hide a pause from the UI. Ambiguity

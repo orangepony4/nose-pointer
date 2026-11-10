@@ -92,6 +92,22 @@ class PreviewTests(unittest.TestCase):
         self.mouse.move.assert_not_called()
         self.mouse.click.assert_not_called()
 
+    def test_unpolled_invalid_camera_sample_cancels_wink_before_reopen(self):
+        self.arm_system_pointer()
+        self.feed(0.8, LEFT_WINK)
+        self.feed(0.92, LEFT_WINK)
+        camera_feed = camera.Camera(0)
+        camera_feed.thread = Mock()
+        camera_feed.thread.is_alive.return_value = True
+        self.app.camera = camera_feed
+        camera_feed.publish(0.98, replace(LEFT_WINK, nose_x=float("nan")))
+        camera_feed.publish(1.07, OPEN_FACE)
+        self.clock.return_value = 1.07
+        self.app.poll()
+        self.app.poll()
+        self.assert_no_system_input()
+        self.assertTrue(self.app.active)
+
     def select_quick_dwell(self):
         self.app.click_mode.set(self.app.text(DWELL_MODE))
         self.app.dwell_time.set("0.6")
@@ -421,13 +437,13 @@ class PreviewTests(unittest.TestCase):
         self.assert_no_system_input()
         self.save_preference.assert_not_called()
 
-    def test_enter_activates_once_on_release_and_respects_disabled_or_changed_button(self):
+    def test_keyboard_action_activates_once_on_release_and_respects_button_changes(self):
         button = self.app.camera_button
         self.root.focus_get.return_value = button
         button.instate.return_value = True
         button.cget.return_value = "Open camera"
         bindings = dict(call.args for call in button.bind.call_args_list)
-        for key in ("Return", "KP_Enter"):
+        for key in ("Return", "KP_Enter", "space"):
             with self.subTest(key=key):
                 press = bindings[f"<KeyPress-{key}>"]
                 release = bindings[f"<KeyRelease-{key}>"]
@@ -458,35 +474,110 @@ class PreviewTests(unittest.TestCase):
                 release(event)
                 button.invoke.assert_not_called()
 
-    def test_enter_focus_change_disarms_the_original_press_and_any_repeat(self):
+                button.instate.return_value = False
+                press(event)
+                button.instate.return_value = True
+                press(event)
+                release(event)
+                button.invoke.assert_not_called()
+
+    def test_keyboard_action_focus_change_disarms_the_original_press_and_any_repeat(self):
         camera_button, pointer_button = self.app.camera_button, self.app.pointer_button
         for button in (camera_button, pointer_button):
             button.instate.return_value = True
-        self.root.focus_get.return_value = camera_button
-        self.app.press_button_enter(SimpleNamespace(widget=camera_button, keysym="Return"))
-        self.app.cancel_button_enter(SimpleNamespace(widget=camera_button))
-        self.root.focus_get.return_value = pointer_button
-        event = SimpleNamespace(widget=pointer_button, keysym="Return")
-        self.app.press_button_enter(event)
-        self.app.release_button_enter(event)
-        camera_button.invoke.assert_not_called()
-        pointer_button.invoke.assert_not_called()
-        self.app.press_button_enter(event)
-        self.app.release_button_enter(event)
-        pointer_button.invoke.assert_called_once_with()
+        for key in ("Return", "space"):
+            with self.subTest(key=key):
+                self.root.focus_get.return_value = camera_button
+                self.app.press_button_key(SimpleNamespace(widget=camera_button, keysym=key))
+                self.app.cancel_button_key(SimpleNamespace(widget=camera_button))
+                self.root.focus_get.return_value = pointer_button
+                event = SimpleNamespace(widget=pointer_button, keysym=key)
+                self.app.press_button_key(event)
+                self.app.release_button_key(event)
+                camera_button.invoke.assert_not_called()
+                pointer_button.invoke.assert_not_called()
+                self.app.press_button_key(event)
+                self.app.release_button_key(event)
+                pointer_button.invoke.assert_called_once_with()
+                pointer_button.invoke.reset_mock()
 
-    def test_enter_held_from_a_picker_does_not_activate_a_button(self):
+    def test_action_key_held_from_a_picker_does_not_activate_a_button(self):
         button = self.app.camera_button
         button.instate.return_value = True
         self.root.focus_get.return_value = button
-        event = SimpleNamespace(widget=button, keysym="Return")
-        self.app.remember_other_enter(SimpleNamespace(widget=self.app.camera_picker, keysym="Return"))
-        self.app.press_button_enter(event)
-        self.app.release_button_enter(event)
+        bindings = {call.args[0]: call.args[1] for call in self.app.camera_picker.bind.call_args_list}
+        for key in ("Return", "space"):
+            with self.subTest(key=key):
+                event = SimpleNamespace(widget=button, keysym=key)
+                picker_press = bindings[f"<KeyPress-{key}>"]
+                self.assertIsNone(picker_press(SimpleNamespace(widget=self.app.camera_picker, keysym=key)))
+                self.app.press_button_key(event)
+                self.app.release_button_key(event)
+                button.invoke.assert_not_called()
+                self.app.press_button_key(event)
+                self.app.release_button_key(event)
+                button.invoke.assert_called_once_with()
+                button.invoke.reset_mock()
+
+    def test_space_pauses_system_control_once_and_a_new_press_is_needed_to_resume(self):
+        self.arm_system_pointer()
+        button = self.app.pointer_button
+        button.invoke.side_effect = self.app.toggle_pointer
+        button.instate.return_value = True
+        button.cget.return_value = "Pause"
+        self.root.focus_get.return_value = button
+        event = SimpleNamespace(widget=button, keysym="space")
+        bindings = dict(call.args for call in button.bind.call_args_list)
+        press = bindings["<KeyPress-space>"]
+        release = bindings["<KeyRelease-space>"]
+
+        for _ in range(5):
+            self.assertEqual(press(event), "break")
+        self.assertTrue(self.app.active)
         button.invoke.assert_not_called()
-        self.app.press_button_enter(event)
-        self.app.release_button_enter(event)
+        release(event)
+        self.assertFalse(self.app.active)
         button.invoke.assert_called_once_with()
+        self.assert_no_system_input()
+
+        self.calibrate(0.9)
+        self.assertTrue(self.app.can_enable)
+        button.cget.return_value = "Enable mouse"
+        release(event)
+        self.assertFalse(self.app.active)
+        button.invoke.assert_called_once_with()
+        press(event)
+        release(event)
+        self.assertTrue(self.app.active)
+        self.assertEqual(button.invoke.call_count, 2)
+        self.assert_no_system_input()
+
+    def test_overlapping_enter_and_space_cannot_rearm_a_changed_action(self):
+        self.arm_system_pointer()
+        button = self.app.pointer_button
+        button.invoke.side_effect = self.app.toggle_pointer
+        button.instate.return_value = True
+        button.cget.return_value = "Pause"
+        self.root.focus_get.return_value = button
+        enter = SimpleNamespace(widget=button, keysym="Return")
+        space = SimpleNamespace(widget=button, keysym="space")
+
+        self.app.press_button_key(enter)
+        self.app.press_button_key(space)
+        self.app.release_button_key(enter)
+        self.assertFalse(self.app.active)
+        self.calibrate(0.9)
+        self.assertTrue(self.app.can_enable)
+        button.cget.return_value = "Enable mouse"
+        self.app.press_button_key(space)
+        self.app.release_button_key(space)
+        self.assertFalse(self.app.active)
+        button.invoke.assert_called_once_with()
+
+        self.app.press_button_key(space)
+        self.app.release_button_key(space)
+        self.assertTrue(self.app.active)
+        self.assert_no_system_input()
 
     def test_invalid_camera_number_never_starts_a_camera(self):
         self.camera.snapshot.return_value = (None, None)
@@ -631,6 +722,28 @@ class PreviewTests(unittest.TestCase):
             self.feed(time)
         self.assertEqual(self.mouse.click.call_args_list, [call("right"), call("left")])
         self.assertEqual(self.mouse.position.call_count, 4)
+
+    def test_unpolled_invalid_camera_sample_clears_a_pending_right_dwell(self):
+        self.select_quick_dwell()
+        self.arm_system_pointer()
+        self.app.toggle_right_dwell()
+        self.feed(0.8)
+        for now in (0.9, 1.08, 1.26, 1.44):
+            self.feed(now, MOVED_FACE)
+        self.assertIsNotNone(self.app.right_dwell_armed_at)
+        self.mouse.reset_mock()
+        camera_feed = camera.Camera(0)
+        camera_feed.thread = Mock()
+        camera_feed.thread.is_alive.return_value = True
+        self.app.camera = camera_feed
+        camera_feed.publish(1.48, replace(MOVED_FACE, right_blink=1.01))
+        camera_feed.publish(1.52, MOVED_FACE)
+        self.clock.return_value = 1.52
+        self.app.poll()
+        self.app.poll()
+        self.assert_no_system_input()
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.assertTrue(self.app.active)
 
     def test_dwell_click_is_cancelled_when_windows_clamps_the_pointer(self):
         self.select_quick_dwell()

@@ -43,6 +43,7 @@ CAMERA_BRIEF_MESSAGES = {
 }
 COMPACT_ACTION_LABELS = {"open_camera": "open_camera_short", "stop_camera": "stop_camera_short",
                          "enable_mouse": "enable_mouse_short"}
+BUTTON_ACTION_KEYS = ("Return", "KP_Enter", "space")
 
 def dwell_label(milliseconds, language):
     value = f"{milliseconds / 1000:g}"
@@ -69,7 +70,7 @@ class PointerApp:
         self.last_applied_position = None
         self.recovery_pending = False
         self.right_dwell_armed_at: float | None = None
-        self.enter_press = None
+        self.button_key_presses = {}
         self.feed_stale = False
         self.can_enable = False
         self.safety_notice = ""
@@ -221,13 +222,14 @@ class PointerApp:
         self.pointer_button.pack(side="left")
         self.right_dwell_button = ttk.Button(dwell_actions, command=self.toggle_right_dwell)
         self.right_dwell_button.bind("<ButtonRelease-3>", self.cancel_right_dwell)
-        self.enter_buttons = (self.camera_button, self.pointer_button, self.right_dwell_button)
-        for key in ("Return", "KP_Enter"):
-            root.bind(f"<KeyRelease-{key}>", self.release_button_enter, add="+")
-            for button in self.enter_buttons:
-                button.bind(f"<KeyPress-{key}>", self.press_button_enter)
-                button.bind(f"<KeyRelease-{key}>", self.release_button_enter)
-        root.bind("<FocusOut>", self.cancel_button_enter, add="+")
+        self.action_buttons = (self.camera_button, self.pointer_button, self.right_dwell_button)
+        for key in BUTTON_ACTION_KEYS:
+            root.bind(f"<KeyPress-{key}>", self.remember_other_button_key, add="+")
+            root.bind(f"<KeyRelease-{key}>", self.release_button_key, add="+")
+            for button in self.action_buttons:
+                button.bind(f"<KeyPress-{key}>", self.press_button_key)
+                button.bind(f"<KeyRelease-{key}>", self.release_button_key)
+        root.bind("<FocusOut>", self.cancel_button_key, add="+")
         self.show_click_instructions()
         self.hotkey_label = self.make_label(footer, "hotkeys", font=("Segoe UI", 10, "bold"), fg=INK,
                                             anchor="w", justify="left", wraplength=430)
@@ -252,51 +254,52 @@ class PointerApp:
         for picker in (self.language_picker, self.sensitivity_picker, self.mode_picker,
                        self.delay_picker, self.camera_picker):
             picker.bind("<MouseWheel>", self.scroll_workspace_wheel, add="+")
-            for key in ("Return", "KP_Enter"):
-                picker.bind(f"<KeyPress-{key}>", self.remember_other_enter, add="+")
+            for key in BUTTON_ACTION_KEYS:
+                picker.bind(f"<KeyPress-{key}>", self.remember_other_button_key, add="+")
         self.camera_button.focus_set()
         root.after(16, self.poll)
 
-    def press_button_enter(self, event):
-        if self.enter_press is None:
+    def press_button_key(self, event):
+        if event.keysym not in self.button_key_presses:
             button = event.widget
             if button is self.root.focus_get() and button.instate(["!disabled"]):
-                self.enter_press = event.keysym, button, button.cget("text")
+                self.button_key_presses[event.keysym] = button, button.cget("text")
             else:
-                self.enter_press = event.keysym, None, None
+                self.button_key_presses[event.keysym] = None
         return "break"
 
-    def remember_other_enter(self, event):
-        if self.enter_press is None:
-            self.enter_press = event.keysym, None, None
+    def remember_other_button_key(self, event):
+        self.button_key_presses.setdefault(event.keysym, None)
 
     def configure_action_button(self, button, **options):
-        if self.enter_press is not None and self.enter_press[1] is button:
-            key, _, label = self.enter_press
-            if options.get("state") == "disabled" or options.get("text", label) != label:
-                self.enter_press = key, None, None
+        for key, press in self.button_key_presses.items():
+            if press is not None and press[0] is button:
+                _, label = press
+                if options.get("state") == "disabled" or options.get("text", label) != label:
+                    self.button_key_presses[key] = None
         button.configure(**options)
 
-    def release_button_enter(self, event):
-        if self.enter_press is not None and self.enter_press[0] == event.keysym:
-            _, button, label = self.enter_press
-            self.enter_press = None
+    def release_button_key(self, event):
+        press = self.button_key_presses.pop(event.keysym, None)
+        if press is not None:
+            button, label = press
             if (button is event.widget and button is self.root.focus_get()
                     and button.instate(["!disabled"]) and button.cget("text") == label):
                 button.invoke()
-        if event.widget in self.enter_buttons:
+        if event.widget in self.action_buttons:
             return "break"
 
-    def cancel_button_enter(self, event):
-        if self.enter_press is not None:
-            if self.enter_press[1] is event.widget:
-                # Keep the key marked as held until release so repeats cannot arm a new button.
-                self.enter_press = self.enter_press[0], None, None
-            self.root.after_idle(self.clear_enter_outside_window)
+    def cancel_button_key(self, event):
+        if self.button_key_presses:
+            for key, press in self.button_key_presses.items():
+                if press is not None and press[0] is event.widget:
+                    # Keep the key held until release so repeats cannot arm a new button.
+                    self.button_key_presses[key] = None
+            self.root.after_idle(self.clear_button_key_outside_window)
 
-    def clear_enter_outside_window(self):
+    def clear_button_key_outside_window(self):
         if not self.root.tk.call("focus", "-displayof", self.root):
-            self.enter_press = None
+            self.button_key_presses.clear()
 
     def resize_header(self, event, title, language_controls):
         title.configure(wraplength=event.width)

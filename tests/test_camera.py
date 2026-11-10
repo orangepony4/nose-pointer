@@ -299,6 +299,21 @@ class CameraTests(unittest.TestCase):
         self.assertEqual(camera.snapshot(), ((0.2, None), None))
         self.assertEqual(camera.snapshot(), ((0.3, FACE), None))
 
+    def test_invalid_observation_reaches_ui_as_loss_before_a_newer_face_sample(self):
+        for sample in (
+            FaceSample(float("nan"), 0.5, 0.1, 0.1),
+            FaceSample(0.5, 1.01, 0.1, 0.1),
+            FaceSample(0.5, 0.5, -0.01, 0.1),
+            FaceSample(0.5, 0.5, 0.1, float("inf")),
+        ):
+            with self.subTest(sample=sample):
+                camera = Camera(0)
+                camera.publish(0.1, FACE)
+                camera.publish(0.2, sample)
+                camera.publish(0.3, FACE)
+                self.assertEqual(camera.snapshot(), ((0.2, None), None))
+                self.assertEqual(camera.snapshot(), ((0.3, FACE), None))
+
     def test_ambiguity_takes_priority_over_loss_and_a_newer_face_sample(self):
         camera = Camera(0)
         camera.publish(0.1, None)

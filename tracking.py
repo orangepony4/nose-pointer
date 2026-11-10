@@ -69,6 +69,12 @@ class FaceSample:
     left_blink: float
     right_blink: float
 
+    @property
+    def is_valid(self) -> bool:
+        return all(0 <= value <= 1 for value in (
+            self.nose_x, self.nose_y, self.left_blink, self.right_blink
+        ))
+
 
 @dataclass(frozen=True)
 class TrackingOutput:
@@ -150,9 +156,7 @@ class Tracker:
             elapsed = 0.0
         self._last_update = now
 
-        if sample is None or not all(0 <= value <= 1 for value in (
-            sample.nose_x, sample.nose_y, sample.left_blink, sample.right_blink
-        )):
+        if sample is None or not sample.is_valid:
             self._break_continuity()
             # A calibrated tracker still needs to check where a face returns.
             if not self.calibrated:

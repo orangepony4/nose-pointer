@@ -4,7 +4,7 @@
 
 Hands-free cursor control for Windows with a webcam. Move your nose to steer the pointer, click by winking or holding the pointer still, or use movement alone with a separate input device.
 
-**[Download the Windows ZIP (v0.9.14)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.14.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.14)
+**[Download the Windows ZIP (v0.9.15)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.15.zip)** · [Release notes](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.15)
 
 ## English
 
@@ -35,7 +35,7 @@ If the default camera fails to open or points at the wrong device, turn it off i
 
 When you open the camera, the app tries Media Foundation for the same camera number if DirectShow cannot open or configure the device or deliver its first frame. Once video arrives, the app keeps using that backend for that capture session.
 
-On shorter windows, scroll the practice area and settings above the camera and mouse buttons. With large text, button captions may be shorter and the privacy note can move into the scrollable area. Use **Page Up** or **Page Down** to scroll with the keyboard. Pressing **Tab** brings each focused control into view. Use **Enter** or **Space** on the focused camera, mouse control or right-click button. If control stops for safety or an error occurs, a brief reason stays near the buttons while you scroll.
+On shorter windows, scroll the practice area and settings above the camera and mouse buttons. With large text, button captions may be shorter and the privacy note can move into the scrollable area. Use **Page Up** or **Page Down** to scroll with the keyboard. Pressing **Tab** brings each focused control into view. Use **Enter** or **Space** on the focused camera, mouse control or right-click button. The action runs once when you release the key. If control stops for safety or an error occurs, a brief reason stays near the buttons while you scroll.
 
 ### Choose how to click
 
@@ -91,7 +91,7 @@ The tests use synthetic face samples and mocked system input. The model check pr
 
 Nose Pointer управляет указателем Windows через веб-камеру. Движения носом перемещают указатель. Клик можно выполнить подмигиванием или задержкой на цели. Режим **Только движение** подходит, если для кликов удобнее другое устройство.
 
-**[Скачать ZIP для Windows (v0.9.14)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.14.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.14)
+**[Скачать ZIP для Windows (v0.9.15)](https://github.com/orangepony4/nose-pointer/archive/refs/tags/v0.9.15.zip)** · [Описание релиза](https://github.com/orangepony4/nose-pointer/releases/tag/v0.9.15)
 
 ### Запуск на Windows
 
@@ -120,7 +120,7 @@ uv run --locked nose_pointer.py
 
 При открытии камеры приложение пробует Media Foundation для того же номера, если DirectShow не может открыть или настроить устройство либо получить первый кадр. После получения видео приложение продолжает использовать выбранный способ захвата до выключения камеры.
 
-В невысоком окне прокручивайте тестовое поле и настройки над кнопками камеры и мыши. При крупном тексте подписи кнопок могут сокращаться, а пояснение об обработке кадров может переместиться в прокручиваемую область. Для прокрутки с клавиатуры нажмите **Page Up** или **Page Down**. При нажатии **Tab** элемент в фокусе появится в видимой части окна. Нажмите **Enter** или **Пробел**, когда в фокусе кнопка камеры, управления мышью или правого клика. Если управление остановилось для безопасности или произошла ошибка, краткая причина остаётся рядом с кнопками при прокрутке.
+В невысоком окне прокручивайте тестовое поле и настройки над кнопками камеры и мыши. При крупном тексте подписи кнопок могут сокращаться, а пояснение об обработке кадров может переместиться в прокручиваемую область. Для прокрутки с клавиатуры нажмите **Page Up** или **Page Down**. При нажатии **Tab** элемент в фокусе появится в видимой части окна. Нажмите **Enter** или **Пробел**, когда в фокусе кнопка камеры, управления мышью или правого клика. Действие выполняется один раз при отпускании клавиши. Если управление остановилось для безопасности или произошла ошибка, краткая причина остаётся рядом с кнопками при прокрутке.
 
 ### Режимы клика
 
