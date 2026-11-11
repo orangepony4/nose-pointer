@@ -1,10 +1,11 @@
 from types import SimpleNamespace
 import sys
 import tkinter as tk
+from tkinter import ttk
 import unittest
 from unittest.mock import Mock, call, patch
 
-from nose_pointer import DWELL_MODE, WINK_MODE, PointerApp
+from nose_pointer import ACCENT, DWELL_MODE, EDGE, WINK_MODE, PointerApp
 from tracking import FaceSample, Settings
 
 
@@ -99,6 +100,30 @@ class DwellEyeWidgetTests(unittest.TestCase):
                 with self.subTest(language=app.language, width=width):
                     app.click_controls.event_generate("<Configure>", width=width, height=24, when="now")
                     self.assertEqual(int(app.dwell_eye_row.grid_info()["row"]), expected_row)
+        self.assertFalse(app.root.winfo_viewable())
+        self.assertEqual(mouse.mock_calls, [])
+
+    def test_dwell_indicator_uses_palette_and_keeps_determinate_progress(self):
+        app, mouse = self.open_app(Settings(calibration_seconds=0, smoothing_seconds=0, dwell_seconds=0.6))
+        bar = app.dwell_bar
+        style = ttk.Style(app.root)
+        style_name = bar.cget("style")
+        self.assertEqual(bar.winfo_class(), "TProgressbar")
+        self.assertEqual(str(bar.cget("mode")), "determinate")
+        self.assertEqual(float(bar.cget("maximum")), 100)
+        self.assertIn("background", style.element_options("Dwell.Progressbar.pbar"))
+        self.assertIn("troughcolor", style.element_options("Dwell.Progressbar.trough"))
+        self.assertEqual(style.lookup(style_name, "background"), ACCENT)
+        self.assertEqual(style.lookup(style_name, "troughcolor"), EDGE)
+        self.assertEqual(float(bar.cget("value")), 0)
+
+        app.update_tracking(0.0, FaceSample(0.5, 0.5, 0.1, 0.1))
+        moved = FaceSample(0.58, 0.5, 0.1, 0.1)
+        for now in (0.1, 0.3, 0.4):
+            app.update_tracking(now, moved)
+        self.assertAlmostEqual(float(bar.cget("value")), 50)
+        app.update_tracking(0.5, FaceSample(0.58, 0.5, 0.95, 0.1))
+        self.assertEqual(float(bar.cget("value")), 0)
         self.assertFalse(app.root.winfo_viewable())
         self.assertEqual(mouse.mock_calls, [])
 

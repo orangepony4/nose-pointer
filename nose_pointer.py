@@ -226,7 +226,20 @@ class PointerApp:
                                         values=tuple(self.dwell_durations), width=6, state="readonly")
         self.delay_picker.pack(side="left")
         self.delay_picker.bind("<<ComboboxSelected>>", self.change_click_mode)
-        self.dwell_bar = ttk.Progressbar(dwell_actions, length=65, maximum=100, mode="determinate")
+        # Windows theme elements paint their own colors. Clone just the dwell
+        # bar's elements from a theme that respects the app palette.
+        progress_style = "Dwell.Horizontal.TProgressbar"
+        style.element_create("Dwell.Progressbar.trough", "from", "clam", "Horizontal.Progressbar.trough")
+        style.element_create("Dwell.Progressbar.pbar", "from", "clam", "Horizontal.Progressbar.pbar")
+        style.layout(progress_style, [
+            ("Dwell.Progressbar.trough", {"sticky": "nswe", "children": [
+                ("Dwell.Progressbar.pbar", {"side": "left", "sticky": "ns"}),
+            ]}),
+        ])
+        style.configure(progress_style, background=ACCENT, troughcolor=EDGE, bordercolor=EDGE,
+                        lightcolor=ACCENT, darkcolor=ACCENT)
+        self.dwell_bar = ttk.Progressbar(dwell_actions, style=progress_style, length=65, maximum=100,
+                                        mode="determinate")
         self.dwell_bar.pack(side="left", fill="x", expand=True, padx=(12, 9))
 
         footer = tk.Frame(shell, bg=BACKGROUND)
