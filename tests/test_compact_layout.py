@@ -152,6 +152,8 @@ class CompactLayoutTests(unittest.TestCase):
 
                         app.pause_for_safety("safety_mouse_button")
                         root.update()
+                        self.assertEqual(int(app.status_label.cget("height")), 0)
+                        self.assertGreaterEqual(app.status_label.winfo_height(), app.status_label.winfo_reqheight())
                         self.assert_widget_fits(app.footer_notice_label, root)
                         for widget in fixed_actions:
                             self.assert_widget_fits(widget, root)

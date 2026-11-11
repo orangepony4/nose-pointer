@@ -165,12 +165,12 @@ class PointerApp:
         self.recenter_button.grid(row=0, column=1, sticky="e")
         mode_header.bind("<Configure>", lambda event: self.resize_header(event, mode_label, self.recenter_button))
         self.status = tk.StringVar(value="")
-        self.set_message("status", "status_welcome")
         self.status_label = tk.Label(frame, textvariable=self.status, font=("Segoe UI", 10),
                                      bg=BACKGROUND, fg=INK, anchor="nw", justify="left",
                                      wraplength=430, height=3)
         self.status_label.pack(fill="x", pady=(4, 4))
         self.status_label.bind("<Configure>", lambda event: self.status_label.configure(wraplength=event.width))
+        self.set_message("status", "status_welcome")
 
         self.pad = tk.Canvas(frame, bg=PAPER, width=400, height=48,
                              highlightthickness=1, highlightbackground=EDGE)
@@ -555,6 +555,9 @@ class PointerApp:
         value = "\n".join(self.text(key, **fields) for key in keys)
         variable = getattr(self, target)
         if variable.get() != value:
+            if target == "status":
+                expand = "camera_error_detail" in keys or "safety_mouse_button" in keys
+                self.status_label.configure(height=0 if expand else 3)
             variable.set(value)
 
     def set_button(self, target, key, **options):
@@ -758,7 +761,6 @@ class PointerApp:
             return
         index = parse_camera_index(self.camera_index.get())
         if index is None:
-            self.status_label.configure(height=3)
             self.set_message("status", "camera_index_invalid")
             self.set_footer_notice("camera_index_invalid")
             self.camera_picker.focus_set()
@@ -774,7 +776,6 @@ class PointerApp:
         self.draw_pad()
         self.show_click_instructions()
         self.set_message("mode", "mode_preview")
-        self.status_label.configure(height=3)
         self.set_message("status", "status_opening")
         self.set_button("camera_button", "stop_camera")
         self.camera_picker.configure(state="disabled")
@@ -785,7 +786,6 @@ class PointerApp:
             self.configure_action_button(self.recenter_button, state="normal")
         except (OSError, RuntimeError) as error:
             self.finish_camera()
-            self.status_label.configure(height=0)
             self.set_message("status", "camera_error_detail", detail=str(error))
             self.set_footer_notice("camera_error")
 
@@ -795,7 +795,6 @@ class PointerApp:
         self.configure_action_button(self.recenter_button, state="disabled")
         self.set_button("camera_button", "open_camera", state="disabled")
         self.set_message("mode", "mode_input_off")
-        self.status_label.configure(height=0 if message == "camera_error_detail" else 3)
         self.set_message("status", message, **fields)
         if message == "status_stopping":
             self.set_footer_notice()
@@ -1049,7 +1048,6 @@ class PointerApp:
                 stopped_by_user = self.messages["status"][0] == ("status_stopping",)
                 self.finish_camera()
                 if error is None or stopped_by_user:
-                    self.status_label.configure(height=3)
                     self.set_message("status", "status_camera_off")
                     self.set_footer_notice()
             elif latest and not self.camera.stop_event.is_set():
