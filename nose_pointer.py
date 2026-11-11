@@ -28,7 +28,8 @@ DWELL_MODE = "dwell"
 MOTION_MODE = "motion"
 CLICK_MODES = (WINK_MODE, DWELL_MODE, MOTION_MODE)
 DWELL_EYE_CHOICES = {"both": None, "left": "left", "right": "right"}
-DWELL_EYES = {f"dwell_eye_{choice}": eye for choice, eye in DWELL_EYE_CHOICES.items()}
+DWELL_EYES = {f"eye_{choice}": eye for choice, eye in DWELL_EYE_CHOICES.items()}
+WINK_LEFT_EYES = {"eye_left": "left", "eye_right": "right"}
 CHOICE_GAP = 9
 SENSITIVITY_PRESETS = {
     "sensitivity_low": (0.18, 0.15, Settings.dead_zone),
@@ -74,6 +75,7 @@ class PointerApp:
         self.settings = settings
         self.args = args
         self.language = getattr(args, "lang", "en")
+        self.wink_left_eye = "right" if args.swap_buttons else "left"
         self.static_labels = []
         self.messages = {}
         self.button_labels = {
@@ -231,7 +233,16 @@ class PointerApp:
         )
         self.layout_choice(self.dwell_eye_row, self.dwell_eye_label, self.dwell_eye_picker)
         self.dwell_eye_picker.bind("<<ComboboxSelected>>", self.change_dwell_eye)
-        self.click_controls.bind("<Configure>", lambda event: self.layout_dwell_eye(event.width))
+        self.wink_eye_row = tk.Frame(self.click_controls, bg=BACKGROUND)
+        self.wink_eye_label = self.make_label(self.wink_eye_row, "wink_eye", font=("Segoe UI", 10), fg=INK)
+        self.wink_eye = tk.StringVar(value=self.text(f"eye_{self.wink_left_eye}"))
+        self.wink_eye_picker = ttk.Combobox(
+            self.wink_eye_row, textvariable=self.wink_eye, values=self.choice_labels(WINK_LEFT_EYES),
+            width=12, state="disabled" if args.no_clicks else "readonly",
+        )
+        self.layout_choice(self.wink_eye_row, self.wink_eye_label, self.wink_eye_picker)
+        self.wink_eye_picker.bind("<<ComboboxSelected>>", self.change_wink_eye)
+        self.click_controls.bind("<Configure>", lambda event: self.layout_click_eye(event.width))
         current_delay = round(settings.dwell_seconds * 1000) if settings.dwell_seconds is not None else initial_dwell_ms
         self.dwell_presets = tuple(sorted({*DWELL_PRESETS_MS, current_delay}))
         self.dwell_durations = self.delay_choices()
@@ -321,7 +332,7 @@ class PointerApp:
         root.bind("<Next>", lambda _event: self.scroll_workspace(1, "pages"))
         # In a scrolling workspace, a wheel over a picker should scroll the view.
         for picker in (self.language_picker, self.sensitivity_picker, self.direction_picker, self.mode_picker,
-                       self.delay_picker, self.dwell_eye_picker, self.camera_picker):
+                       self.delay_picker, self.dwell_eye_picker, self.wink_eye_picker, self.camera_picker):
             picker.bind("<MouseWheel>", self.scroll_workspace_wheel, add="+")
             for key in BUTTON_ACTION_KEYS:
                 picker.bind(f"<KeyPress-{key}>", self.remember_other_button_key, add="+")
@@ -408,20 +419,28 @@ class PointerApp:
 
         row.bind("<Configure>", fit)
 
-    def layout_dwell_eye(self, width):
-        if self.settings.dwell_seconds is None:
+    def layout_click_eye(self, width):
+        mode = self.selected_click_mode()
+        if mode != DWELL_MODE:
             self.dwell_eye_row.grid_remove()
+        if mode != WINK_MODE:
+            self.wink_eye_row.grid_remove()
+        if mode == MOTION_MODE:
             self.click_controls.columnconfigure(1, minsize=0)
             return
+        if mode == DWELL_MODE:
+            row, label, picker = self.dwell_eye_row, self.dwell_eye_label, self.dwell_eye_picker
+        else:
+            row, label, picker = self.wink_eye_row, self.wink_eye_label, self.wink_eye_picker
         mode_width = self.click_mode_label.winfo_reqwidth() + self.mode_picker.winfo_reqwidth() + CHOICE_GAP
-        eye_width = self.dwell_eye_label.winfo_reqwidth() + self.dwell_eye_picker.winfo_reqwidth() + CHOICE_GAP
+        eye_width = label.winfo_reqwidth() + picker.winfo_reqwidth() + CHOICE_GAP
         gap = 12
         if mode_width + eye_width + gap <= width:
             self.click_controls.columnconfigure(1, minsize=eye_width + gap)
-            self.dwell_eye_row.grid(row=0, column=1, columnspan=1, sticky="ew", padx=(gap, 0), pady=0)
+            row.grid(row=0, column=1, columnspan=1, sticky="ew", padx=(gap, 0), pady=0)
         else:
             self.click_controls.columnconfigure(1, minsize=0)
-            self.dwell_eye_row.grid(row=1, column=0, columnspan=2, sticky="ew", padx=0, pady=(7, 0))
+            row.grid(row=1, column=0, columnspan=2, sticky="ew", padx=0, pady=(7, 0))
 
     def resize_footer(self, event):
         if event.widget is not self.root:
@@ -587,7 +606,7 @@ class PointerApp:
         return {dwell_label(delay, self.language): delay for delay in self.dwell_presets}
 
     def dwell_eye_text(self):
-        return self.text(f"dwell_eye_{self.settings.dwell_eye or 'both'}")
+        return self.text(f"eye_{self.settings.dwell_eye or 'both'}")
 
     def direction_text(self):
         return self.text("direction_mirrored" if self.settings.mirror else "direction_direct")
@@ -609,6 +628,8 @@ class PointerApp:
         self.delay_picker.configure(values=tuple(self.dwell_durations))
         self.dwell_eye.set(self.dwell_eye_text())
         self.dwell_eye_picker.configure(values=self.choice_labels(DWELL_EYES))
+        self.wink_eye.set(self.text(f"eye_{self.wink_left_eye}"))
+        self.wink_eye_picker.configure(values=self.choice_labels(WINK_LEFT_EYES))
         self.sensitivity.set(self.text(preset))
         self.sensitivity_picker.configure(values=self.choice_labels(self.sensitivity_presets))
         self.direction.set(self.direction_text())
@@ -617,7 +638,7 @@ class PointerApp:
         self.mode_picker.configure(values=self.choice_labels(CLICK_MODES))
         for label, key in self.static_labels:
             label.configure(text=self.text(key))
-        self.layout_dwell_eye(self.click_controls.winfo_width())
+        self.layout_click_eye(self.click_controls.winfo_width())
         self.refresh_action_labels()
         for target in self.messages:
             self.render_message(target)
@@ -625,7 +646,7 @@ class PointerApp:
         save_language(language)
 
     def show_click_instructions(self):
-        self.layout_dwell_eye(self.click_controls.winfo_width())
+        self.layout_click_eye(self.click_controls.winfo_width())
         self.dwell_bar.configure(value=0)
         if self.settings.dwell_seconds is not None:
             self.dwell_controls.pack(fill="x", pady=(8, 0))
@@ -709,6 +730,19 @@ class PointerApp:
         eye = DWELL_EYES[choice]
         self.apply_tracking_settings(replace(self.settings, dwell_eye=eye), require_fresh_frames=True)
         save_preference("dwell-eye", eye or "both")
+
+    def change_wink_eye(self, _event=None):
+        choice = self.choice_key(self.wink_eye, WINK_LEFT_EYES)
+        if self.active or self.selected_click_mode() != WINK_MODE or choice is None:
+            self.wink_eye.set(self.text(f"eye_{self.wink_left_eye}"))
+            return
+        eye = WINK_LEFT_EYES[choice]
+        if eye == self.wink_left_eye:
+            return
+        self.wink_left_eye = eye
+        self.restart_calibration()
+        self.show_click_instructions()
+        save_preference("wink-left-eye", eye)
 
     def change_sensitivity(self, _event=None):
         if self.active:
@@ -844,6 +878,7 @@ class PointerApp:
             self.mode_picker.configure(state="disabled")
             self.delay_picker.configure(state="disabled")
             self.dwell_eye_picker.configure(state="disabled")
+            self.wink_eye_picker.configure(state="disabled")
             self.set_message("mode", "mode_active")
             self.set_button("pointer_button", "pause")
             self.recenter()
@@ -909,6 +944,7 @@ class PointerApp:
         self.mode_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
         self.delay_picker.configure(state="readonly")
         self.dwell_eye_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
+        self.wink_eye_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
         self.set_button("pointer_button", "enable_mouse", state="disabled")
 
     def reset_to_preview(self, message):
@@ -1011,8 +1047,8 @@ class PointerApp:
             right_dwell = self.settings.dwell_seconds is not None and self.right_dwell_armed_at is not None
             if right_dwell:
                 button = "right"
-            elif self.args.swap_buttons and self.settings.dwell_seconds is None:
-                button = "right" if button == "left" else "left"
+            elif self.settings.dwell_seconds is None:
+                button = "left" if click == self.wink_left_eye else "right"
             if system_click:
                 self.mouse.click(button, expected_position=self.last_applied_position, valid_until=valid_until)
             if right_dwell:
@@ -1173,6 +1209,7 @@ def main(argv=None):
             args.camera = parse_camera_index(load_text_preference("camera")) or 0
         if not 0 <= args.camera <= MAX_CAMERA_INDEX:
             parser.error(text("cli_camera_invalid"))
+        args.swap_buttons = args.swap_buttons or load_text_preference("wink-left-eye") == "right"
 
         from windows_mouse import WindowsMouse, enable_dpi_awareness
 

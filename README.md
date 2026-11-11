@@ -24,7 +24,7 @@ uv run --locked nose_pointer.py
 
 Nose Pointer opens in English on first launch. Use **Language** to switch to **Русский** before enabling system control or while in practice mode. Switching keeps your practice position and settings. The app saves the language preference in `%LOCALAPPDATA%\NosePointer\language.txt`.
 
-The app remembers the sensitivity preset, horizontal movement, click mode, dwell delay and dwell eye you choose. Each launch starts with the camera and system control off. The command-line options `--range-x`, `--range-y`, `--no-mirror`, `--no-clicks`, `--dwell-ms` and `--dwell-eye` override saved choices for that launch.
+The app remembers the sensitivity preset, horizontal movement, click mode, eye for left click, dwell delay and dwell eye you choose. Each launch starts with the camera and system control off. The command-line options `--range-x`, `--range-y`, `--no-mirror`, `--no-clicks`, `--swap-buttons`, `--dwell-ms` and `--dwell-eye` override saved choices for that launch.
 
 1. Select **Open camera** (Открыть камеру). The violet dot is a practice pointer. Your Windows cursor stays under your usual control.
 2. Look straight ahead while the app calibrates and follow the eye instructions in the status. Try moving the dot. If you use a click mode, try it in the practice area and look for the recognized click below it.
@@ -44,6 +44,8 @@ Use **Click mode** (Режим клика) in practice mode.
 - **Wink** (Подмигивание). Hold a wink for about a quarter of a second, then reopen the eye to send the corresponding click. The pointer holds still during the wink. Blinking both eyes and closing one eye for too short or too long a time produce no click. If the eye stays partly open during the gesture, Nose Pointer measures the closure only up to the start of that reopening.
 - **Dwell** (Задержка курсора). Move to a target and hold the pointer there. The progress bar tracks the delay, which defaults to 1.2 seconds and can be set from 0.6 to 5 seconds. By default, a clear closure of either eye restarts the timer. Move the visible cursor away before the next click. If the cursor reaches a gap between displays, the timer follows its visible position on the display edge. For one right click, select **Right click** (Правый клик), then move to the target and dwell. You can select that button with a regular dwell click when system control is enabled. The next dwell returns to left-click behavior. Select **Cancel** (Отменить) to clear the choice.
 - **Motion only** (Только движение). Use nose movement for the pointer and another device for clicks. This mode uses face position for calibration and steering.
+
+In **Wink** practice mode, use **Eye for left click** to choose which of your eyes sends a left click. Your other eye sends a right click. The default is your left eye. Changing this setting with the camera on cancels the current gesture and starts a fresh calibration.
 
 #### Dwell with one eye open
 
@@ -87,7 +89,7 @@ uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-
 - `--range-x` and `--range-y` set the fraction of the frame you move from the neutral pose to reach a screen edge. Smaller values increase sensitivity. A custom pair appears as **Custom** (Своя) in the sensitivity menu.
 - `--wink-ms` sets the minimum wink duration. The default is 220 ms.
 - `--dwell-ms 1600` starts in dwell mode. The supported range is 600–5000 ms.
-- `--no-mirror` starts with **Direct** horizontal movement for this launch. `--swap-buttons` swaps the left and right wink actions. `--no-clicks` starts and locks the app in motion-only mode.
+- `--no-mirror` starts with **Direct** horizontal movement for this launch. `--swap-buttons` starts with the right eye assigned to left clicks for this launch. `--no-clicks` starts and locks the app in motion-only mode.
 - `--lang ru` or `--lang en` overrides the saved language for that launch.
 
 ### Privacy and testing
@@ -134,7 +136,7 @@ uv run --locked nose_pointer.py
 
 При первом запуске интерфейс открывается на английском. Выберите **Language → Русский** до включения системной мыши или в режиме пробы. Настройки и положение тестового указателя сохранятся. Язык запоминается в файле `%LOCALAPPDATA%\NosePointer\language.txt`.
 
-Приложение запоминает профиль чувствительности, направление по горизонтали, режим клика, задержку и выбор глаза. При каждом запуске камера и системное управление выключены. Параметры командной строки `--range-x`, `--range-y`, `--no-mirror`, `--no-clicks`, `--dwell-ms` и `--dwell-eye` имеют приоритет над сохранёнными настройками на время текущего запуска.
+Приложение запоминает профиль чувствительности, направление по горизонтали, режим клика, глаз для левого клика, длительность задержки и глаз для задержки. При каждом запуске камера и системное управление выключены. Параметры командной строки `--range-x`, `--range-y`, `--no-mirror`, `--no-clicks`, `--swap-buttons`, `--dwell-ms` и `--dwell-eye` имеют приоритет над сохранёнными настройками на время текущего запуска.
 
 1. Нажмите **Открыть камеру**. В режиме пробы фиолетовая точка движется в окне, а курсор Windows остаётся под вашим обычным управлением.
 2. Смотрите прямо во время калибровки и следуйте подсказкам в строке состояния. Попробуйте подвигать точку. Если вы выбрали режим клика, попробуйте его в тестовом поле. Под полем появится распознанный клик.
@@ -154,6 +156,8 @@ uv run --locked nose_pointer.py
 - **Подмигивание.** Закройте один глаз примерно на четверть секунды и откройте его, чтобы выполнить соответствующий клик. Указатель удерживается на месте во время жеста. Моргание двумя глазами, слишком короткое или слишком долгое подмигивание не вызывают клик. Если глаз остаётся приоткрытым во время жеста, Nose Pointer измеряет длительность смыкания век до того момента, когда глаз начал открываться.
 - **Задержка курсора.** Подведите указатель к цели и задержитесь. Полоса показывает ход отсчёта. По умолчанию задержка составляет 1,2 секунды, доступный диапазон от 0,6 до 5 секунд. В обычном режиме закрытие любого глаза сбрасывает отсчёт. Для следующего клика сначала отведите видимый указатель. Если указатель упирается в промежуток между экранами, отсчёт учитывает его видимое положение на краю экрана. Для разового правого клика нажмите **Правый клик**, затем переместите указатель к цели и снова задержитесь. При включённой мыши эту кнопку можно нажать обычным кликом по задержке. После правого клика задержка снова даёт левый клик. Кнопка **Отменить** сбрасывает выбор.
 - **Только движение.** Двигайте указатель носом и используйте другое устройство для кликов. Положение век не влияет на калибровку или движение в этом режиме.
+
+В режиме пробы выберите **Подмигивание**, затем укажите **Глаз для левого клика**. Другой глаз будет выполнять правый клик. По умолчанию левый клик выполняется левым глазом. При смене настройки с включённой камерой текущий жест отменяется и начинается новая калибровка.
 
 #### Задержка с одним открытым глазом
 
@@ -197,7 +201,7 @@ uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-
 - `--range-x` и `--range-y` задают долю кадра, которую нужно пройти от нейтральной позиции до края экрана. Меньшие значения повышают чувствительность. Своя пара значений появится в списке **Чувствительность** как **Своя**.
 - `--wink-ms` задаёт минимальную длительность подмигивания. По умолчанию это 220 мс.
 - `--dwell-ms 1600` открывает режим задержки и задаёт время ожидания от 600 до 5000 мс.
-- `--no-mirror` выбирает движение **Напрямую** по горизонтали на один запуск. `--swap-buttons` меняет местами левый и правый клики подмигиванием. `--no-clicks` запускает приложение в режиме **Только движение** и блокирует выбор других режимов.
+- `--no-mirror` выбирает движение **Напрямую** по горизонтали на один запуск. `--swap-buttons` назначает левый клик правому глазу на один запуск. `--no-clicks` запускает приложение в режиме **Только движение** и блокирует выбор других режимов.
 - `--lang ru` или `--lang en` переопределяет сохранённый язык для этого запуска.
 
 ### Приватность и проверки

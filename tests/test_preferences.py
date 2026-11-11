@@ -26,11 +26,13 @@ class PreferencesTests(unittest.TestCase):
         ):
             main(list(arguments))
         self.launched_camera = app.call_args.args[-1].camera
+        self.launched_swap_buttons = app.call_args.args[-1].swap_buttons
         return app.call_args.args[-2], app.call_args.kwargs["initial_dwell_ms"]
 
     def test_missing_preferences_use_existing_defaults_without_writing(self):
         self.assertEqual(self.launch(), (Settings(), DEFAULT_DWELL_MS))
         self.assertEqual(self.launched_camera, 0)
+        self.assertFalse(self.launched_swap_buttons)
         self.assertFalse(self.directory.exists())
 
     def test_remembers_the_camera_and_keeps_cli_overrides_transient(self):
@@ -114,6 +116,25 @@ class PreferencesTests(unittest.TestCase):
         self.assertTrue(settings.motion_only)
         self.assertEqual((settings.dwell_eye, settings.dwell_seconds, delay), (None, None, 950))
         self.assertEqual({path.name: path.read_bytes() for path in self.directory.iterdir()}, stored)
+
+    def test_saved_wink_eye_and_transient_cli_override(self):
+        path = self.directory / "wink-left-eye.txt"
+        save_preference("wink-left-eye", "right")
+        self.launch()
+        self.assertTrue(self.launched_swap_buttons)
+        self.assertEqual(path.read_bytes(), b"right\n")
+
+        save_preference("wink-left-eye", "left")
+        self.launch("--swap-buttons")
+        self.assertTrue(self.launched_swap_buttons)
+        self.launch()
+        self.assertFalse(self.launched_swap_buttons)
+        self.assertEqual(path.read_bytes(), b"left\n")
+
+        path.write_bytes(b"both\n")
+        self.launch()
+        self.assertFalse(self.launched_swap_buttons)
+        self.assertEqual(path.read_bytes(), b"both\n")
 
     def test_one_eye_dwell_conflicts_with_motion_only(self):
         with redirect_stderr(StringIO()) as stderr, self.assertRaises(SystemExit) as error:

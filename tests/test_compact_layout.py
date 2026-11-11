@@ -91,6 +91,24 @@ class CompactLayoutTests(unittest.TestCase):
         self.assert_widget_fits(app.pointer_button, app.root)
         self.assertEqual(mouse.mock_calls, [])
 
+    def test_wink_eye_is_reachable_by_keyboard_with_enlarged_text(self):
+        for language in ("en", "ru"):
+            with self.subTest(language=language):
+                app, mouse = self.open_window(384, (640, 480), language)
+                root = app.root
+                app.click_mode.set(app.text(WINK_MODE))
+                app.change_click_mode()
+                app.mode_picker.focus_force()
+                root.update()
+                app.mode_picker.event_generate("<KeyPress-Tab>")
+                root.update()
+                self.assertIs(root.focus_get(), app.wink_eye_picker)
+                self.assert_widget_fits(app.wink_eye_picker, app.workspace)
+                self.assert_widget_fits(app.camera_button, root)
+                self.assert_widget_fits(app.pointer_button, root)
+                self.assertFalse(app.dwell_eye_picker.winfo_ismapped())
+                self.assertEqual(mouse.mock_calls, [])
+
     def test_large_text_keeps_footer_actions_and_tabbed_settings_reachable(self):
         for dpi in (288, 384):
             screens = ((800, 600), (1024, 768))

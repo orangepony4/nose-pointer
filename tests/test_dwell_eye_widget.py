@@ -5,7 +5,7 @@ from tkinter import ttk
 import unittest
 from unittest.mock import Mock, call, patch
 
-from nose_pointer import ACCENT, DWELL_MODE, EDGE, WINK_MODE, PointerApp
+from nose_pointer import ACCENT, DWELL_MODE, EDGE, MOTION_MODE, WINK_MODE, PointerApp
 from tracking import FaceSample, Settings
 
 
@@ -16,7 +16,7 @@ class DwellEyeWidgetTests(unittest.TestCase):
         self.save_preference = self.enterContext(patch("nose_pointer.save_preference"))
         self.enterContext(patch("nose_pointer.save_language"))
 
-    def open_app(self, settings, *, no_clicks=False):
+    def open_app(self, settings, *, no_clicks=False, swap_buttons=False):
         try:
             root = tk.Tk()
         except tk.TclError as error:
@@ -28,7 +28,7 @@ class DwellEyeWidgetTests(unittest.TestCase):
         mouse.emergency_requested.return_value = False
         mouse.recenter_requested.return_value = False
         mouse.button_held.return_value = False
-        args = SimpleNamespace(camera=0, lang="en", no_clicks=no_clicks, swap_buttons=False)
+        args = SimpleNamespace(camera=0, lang="en", no_clicks=no_clicks, swap_buttons=swap_buttons)
         with patch.object(tk.Misc, "focus_set"), patch.object(PointerApp, "poll"):
             app = PointerApp(root, mouse, settings, args)
         root.update_idletasks()
@@ -85,12 +85,57 @@ class DwellEyeWidgetTests(unittest.TestCase):
         self.assertEqual(app.dwell_controls.winfo_manager(), "")
         self.assertEqual(app.dwell_eye_row.winfo_manager(), "")
         self.assertTrue(app.dwell_eye_picker.instate(["disabled"]))
+        self.assertEqual(app.wink_eye_row.winfo_manager(), "")
+        self.assertTrue(app.wink_eye_picker.instate(["disabled"]))
         self.choose(app.dwell_eye_picker, 2)
         self.assertIsNone(app.settings.dwell_eye)
         self.assertEqual(app.dwell_eye_picker.current(), 0)
         self.assertFalse(app.root.winfo_viewable())
         self.save_preference.assert_not_called()
         self.assertEqual(mouse.mock_calls, [])
+
+    def test_wink_eye_picker_localizes_locks_and_returns_after_switching_modes(self):
+        app, mouse = self.open_app(Settings(calibration_seconds=0), swap_buttons=True)
+        picker = app.wink_eye_picker
+        self.assertEqual(picker.cget("values"), ("Left eye", "Right eye"))
+        self.assertEqual(picker.get(), "Right eye")
+        self.assertEqual(app.wink_eye_row.winfo_manager(), "grid")
+        self.assertEqual(app.dwell_eye_row.winfo_manager(), "")
+        self.assertEqual(app.status.get(), app.text("status_welcome"))
+
+        self.choose(app.language_picker, 1)
+        self.assertEqual(picker.cget("values"), ("Левый глаз", "Правый глаз"))
+        self.assertEqual(picker.get(), "Правый глаз")
+        self.choose(picker, 0)
+        self.assertEqual(app.wink_left_eye, "left")
+        self.assertEqual(app.status.get(), app.text("status_welcome"))
+        self.save_preference.assert_called_once_with("wink-left-eye", "left")
+
+        app.update_tracking(0.1, FaceSample(0.5, 0.5, 0.1, 0.1))
+        self.clock.return_value = 0.1
+        app.toggle_pointer()
+        self.assertTrue(app.active)
+        self.assertTrue(picker.instate(["disabled"]))
+        self.choose(picker, 1)
+        self.assertEqual(picker.current(), 0)
+        self.assertEqual(app.wink_left_eye, "left")
+        app.pause()
+        self.assertTrue(picker.instate(["readonly", "!disabled"]))
+        self.choose(app.mode_picker, 1)
+        self.assertEqual(app.wink_eye_row.winfo_manager(), "")
+        self.assertEqual(app.dwell_eye_row.winfo_manager(), "grid")
+        self.choose(app.mode_picker, 2)
+        self.assertEqual(app.wink_eye_row.winfo_manager(), "")
+        self.assertEqual(app.dwell_eye_row.winfo_manager(), "")
+        self.choose(app.mode_picker, 0)
+        self.assertEqual(app.wink_eye_row.winfo_manager(), "grid")
+        self.assertEqual(picker.get(), "Левый глаз")
+        self.assertEqual(self.save_preference.call_args_list, [
+            call("wink-left-eye", "left"), call("click-mode", DWELL_MODE),
+            call("click-mode", MOTION_MODE), call("click-mode", WINK_MODE),
+        ])
+        mouse.move.assert_not_called()
+        mouse.click.assert_not_called()
 
     def test_eye_picker_uses_spare_mode_row_space_and_stacks_at_narrow_widths(self):
         app, mouse = self.open_app(Settings(dwell_seconds=1.2))
