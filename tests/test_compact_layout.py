@@ -29,6 +29,7 @@ class CompactLayoutTests(unittest.TestCase):
         root.winfo_screenheight = lambda: screen[1]
         args = SimpleNamespace(camera=0, lang=language, no_clicks=False, swap_buttons=False)
         mouse = Mock()
+        mouse.button_held.return_value = False
         with patch.object(PointerApp, "poll"):
             app = PointerApp(root, mouse, Settings(dwell_seconds=1.2), args)
             width, height = root.minsize()

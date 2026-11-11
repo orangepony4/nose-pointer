@@ -822,6 +822,9 @@ class PointerApp:
         if ready_at is None or not ready_at <= now <= ready_at + self.settings.max_sample_gap_seconds:
             self.pause_for_safety("safety_stale_preview")
             return
+        if not self.settings.motion_only and self.mouse.button_held():
+            self.pause_for_safety("safety_mouse_button")
+            return
         try:
             self.mouse.begin_control()
         except ControlSessionBusy:
@@ -999,8 +1002,8 @@ class PointerApp:
                 self.position = result.position
                 self.draw_pad()
             if self.active:
-                self.last_applied_position = (
-                    anchor if calibrating else self.mouse.move(*result.position, valid_until=valid_until)
+                self.last_applied_position = anchor if calibrating else self.mouse.move(
+                    *result.position, valid_until=valid_until, allow_drag=self.settings.motion_only,
                 )
         if click is not None:
             if system_click and self.cancel_unsafe_click():

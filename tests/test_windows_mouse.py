@@ -151,6 +151,41 @@ class WindowsMouseTests(unittest.TestCase):
         events = self.mouse._send_input.call_args.args[1]
         self.assertEqual([event.mi.dwFlags for event in events], [0x0008, 0x0010])
 
+    def test_active_move_checks_held_buttons_after_the_layout_check(self):
+        self.mouse.begin_control()
+        displays = self.mouse._monitor_rectangles.return_value
+        for button in (0x01, 0x02, 0x04, 0x05, 0x06):
+            with self.subTest(button=button):
+                self.mouse._key_state.return_value = 0
+                self.mouse._key_state.side_effect = None
+
+                def layout_after_button_down():
+                    self.mouse._key_state.side_effect = lambda key: -32768 if key == button else 0
+                    return displays
+
+                self.mouse._monitor_rectangles.side_effect = layout_after_button_down
+                with self.assertRaises(MouseButtonHeld):
+                    self.mouse.move(0.5, 0.5)
+                self.mouse._set_cursor_pos.assert_not_called()
+
+        self.mouse._monitor_rectangles.side_effect = None
+        self.mouse._key_state.side_effect = lambda key: 1 if key == 0x01 else 0
+        # A completed click can leave the historical low bit set.
+        self.mouse.move(0.5, 0.5)
+        self.mouse._set_cursor_pos.assert_called_once()
+
+    def test_explicit_drag_allows_move_with_held_button_and_still_checks_f8(self):
+        self.mouse.begin_control()
+        self.mouse._key_state.side_effect = lambda key: -32768 if key == 0x01 else 0
+        self.mouse.move(0.5, 0.5, allow_drag=True)
+        self.mouse._set_cursor_pos.assert_called_once()
+
+        self.mouse._set_cursor_pos.reset_mock()
+        self.mouse._key_state.side_effect = lambda key: -32768 if key in (0x01, 0x77) else 0
+        with self.assertRaises(EmergencyPauseRequested):
+            self.mouse.move(0.5, 0.5, allow_drag=True)
+        self.mouse._set_cursor_pos.assert_not_called()
+
     def test_f8_held_during_layout_check_blocks_active_move_and_click(self):
         self.mouse.begin_control()
         self.fake_cursor(-629, 325)

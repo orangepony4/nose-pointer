@@ -107,8 +107,8 @@ MESSAGES = {
         "Клик отменён. Указатель в другой точке. Управление выключено.",
     ),
     "safety_mouse_button": (
-        "Click cancelled. A mouse button is held. System control is off.",
-        "Клик отменён. Кнопка мыши удерживается. Управление выключено.",
+        "A mouse button was held. Release it and enable mouse again after calibration.",
+        "Была зажата кнопка мыши. Отпустите её и снова включите мышь после калибровки.",
     ),
     "safety_display_changed": (
         "Display layout changed. Enable mouse again after calibration.",
@@ -123,7 +123,7 @@ MESSAGES = {
     "safety_stale_preview_brief": ("Camera frames were delayed.", "Кадры задержались."),
     "safety_multiple_brief": ("Multiple faces detected.", "В кадре несколько лиц."),
     "safety_pointer_moved_brief": ("Click cancelled because the pointer moved.", "Клик отменён. Указатель переместился."),
-    "safety_mouse_button_brief": ("Click cancelled. A mouse button is held.", "Клик отменён. Кнопка мыши удерживается."),
+    "safety_mouse_button_brief": ("Paused when a mouse button was held.", "Пауза из-за зажатой кнопки мыши."),
     "safety_display_changed_brief": ("Display layout changed.", "Расположение экранов изменилось."),
     "safety_control_busy_brief": ("Another window has mouse control.", "Мышью управляет другое окно."),
     "instruction_wink": ("Wink with one eye, then reopen it.", "Подмигните одним глазом и откройте его."),

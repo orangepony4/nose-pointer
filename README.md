@@ -73,7 +73,7 @@ Enabling mouse control requires a recent preview frame. If the camera feed is de
 
 In one Windows session, one Nose Pointer window controls the mouse at a time. Other windows can stay in practice. Pause the active window, stop its camera, or close it before enabling control in another one.
 
-If Windows reports an unexpected cursor position or a held physical mouse button, including a side button, as the app is about to click, Nose Pointer cancels the click and returns to practice mode. For a dwell click, the app makes these checks before moving the pointer and again before sending the click.
+In wink and dwell modes, if Windows reports a held mouse button, including a side button, Nose Pointer returns to practice mode before moving the pointer or clicking. Release the button and select **Enable mouse** again after calibration. Use **Motion only** to steer the pointer while holding a button on another input device for a drag. If the cursor is in an unexpected position before an automatic click, the app also returns to practice. For a dwell click, it checks the position before moving and again before clicking.
 
 If you connect, disconnect, or rearrange a display, Nose Pointer returns to practice mode before sending more input. After calibration, select **Enable mouse** to use the new display layout.
 
@@ -183,7 +183,7 @@ uv run --locked nose_pointer.py
 
 В одном сеансе Windows мышью управляет одно окно Nose Pointer. Остальные окна могут работать в режиме пробы. Поставьте активное окно на паузу, выключите в нём камеру или закройте его, затем включите управление в другом.
 
-Если перед кликом Windows сообщает, что указатель оказался в другой точке или удерживается кнопка мыши, в том числе боковая, Nose Pointer отменяет клик и возвращается в режим пробы. При клике по задержке приложение выполняет эти проверки перед перемещением указателя и ещё раз перед самим кликом.
+В режимах подмигивания и задержки Nose Pointer возвращается в режим пробы перед движением или кликом, если Windows сообщает о зажатой кнопке мыши, в том числе боковой. Отпустите кнопку и после калибровки снова нажмите **Включить мышь**. В режиме **Только движение** можно перемещать указатель носом и удерживать кнопку на другом устройстве для перетаскивания. Приложение также возвращается в режим пробы, если указатель сместился перед автоматическим кликом. При клике по задержке положение проверяется перед движением и ещё раз перед кликом.
 
 Если подключить, отключить или переставить экран, Nose Pointer возвращается в режим пробы перед следующим движением или кликом. После калибровки нажмите **Включить мышь**, чтобы работать с новой схемой экранов.
 

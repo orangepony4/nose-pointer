@@ -7,7 +7,8 @@ import camera
 from nose_pointer import DWELL_MODE, MOTION_MODE, WINK_MODE, PointerApp
 from tracking import FaceSample, Settings
 from windows_mouse import (
-    ControlSessionBusy, DisplayLayoutChanged, EmergencyPauseRequested, InputFrameExpired, PointerMoved, WindowsMouse,
+    ControlSessionBusy, DisplayLayoutChanged, EmergencyPauseRequested, InputFrameExpired, MouseButtonHeld, PointerMoved,
+    WindowsMouse,
 )
 
 
@@ -39,7 +40,7 @@ class PreviewTests(unittest.TestCase):
         self.mouse.button_held.return_value = False
         self.mouse.position.return_value = (0.5, 0.5)
 
-        def move_cursor(x, y, *, valid_until=None):
+        def move_cursor(x, y, *, valid_until=None, allow_drag=False):
             self.mouse.position.return_value = (x, y)
             return x, y
 
@@ -592,7 +593,7 @@ class PreviewTests(unittest.TestCase):
         self.feed(0.71)
         self.assert_no_system_input()
         self.feed(0.8)
-        self.mouse.move.assert_called_once_with(0.3, 0.6, valid_until=ANY)
+        self.mouse.move.assert_called_once_with(0.3, 0.6, valid_until=ANY, allow_drag=False)
 
     def test_enable_accepts_a_ready_frame_at_the_freshness_boundary(self):
         self.calibrate(0)
@@ -651,7 +652,7 @@ class PreviewTests(unittest.TestCase):
         self.assert_no_system_input()
         self.assertTrue(self.app.tracker.calibrated)
         self.feed(1.5, replace(OPEN_FACE, nose_y=0.60))
-        self.mouse.move.assert_called_once_with(0.25, 0.8, valid_until=ANY)
+        self.mouse.move.assert_called_once_with(0.25, 0.8, valid_until=ANY, allow_drag=False)
         self.mouse.click.assert_not_called()
 
     def test_enabling_mouse_and_f9_wait_for_frames_captured_during_calibration(self):
@@ -748,7 +749,7 @@ class PreviewTests(unittest.TestCase):
         self.mouse.end_control.assert_not_called()
         for now in (1.65, 1.84, 2.03, 2.22, 2.41, 2.60):
             self.feed(now, MOVED_FACE)
-        self.mouse.move.assert_called_with(*anchor, valid_until=ANY)
+        self.mouse.move.assert_called_with(*anchor, valid_until=ANY, allow_drag=False)
         self.mouse.click.assert_not_called()
 
     def test_recalibrate_button_yields_to_an_emergency_pause_and_to_camera_shutdown(self):
@@ -1494,7 +1495,7 @@ class PreviewTests(unittest.TestCase):
         self.app.toggle_right_dwell()
         self.feed(0.8)
 
-        def clipped_move(x, y, *, valid_until=None):
+        def clipped_move(x, y, *, valid_until=None, allow_drag=False):
             self.mouse.position.return_value = (0.25, 0.25)
             return x, y
 
@@ -1571,6 +1572,50 @@ class PreviewTests(unittest.TestCase):
         self.assert_no_system_input()
         self.assertFalse(self.app.active)
         self.assertEqual(self.app.safety_notice, "safety_mouse_button")
+
+    def test_mouse_button_during_motion_pauses_until_explicit_enable_after_release(self):
+        self.arm_system_pointer()
+        move_cursor = self.mouse.move.side_effect
+        self.mouse.move.side_effect = MouseButtonHeld
+
+        self.feed(0.8, MOVED_FACE)
+        self.assertFalse(self.app.active)
+        self.assertEqual(self.app.safety_notice, "safety_mouse_button")
+        self.mouse.end_control.assert_called_once_with()
+        self.mouse.click.assert_not_called()
+
+        self.mouse.move.reset_mock()
+        self.mouse.move.side_effect = move_cursor
+        self.calibrate(0.9)
+        self.assertFalse(self.app.active)
+        self.assert_no_system_input()
+        self.mouse.button_held.return_value = True
+        self.app.toggle_pointer()
+        self.assertFalse(self.app.active)
+        self.mouse.begin_control.assert_not_called()
+
+        self.mouse.button_held.return_value = False
+        self.calibrate(1.3)
+        self.assertFalse(self.app.active)
+        self.assert_no_system_input()
+        self.app.toggle_pointer()
+        self.assertTrue(self.app.active)
+        self.mouse.begin_control.assert_called_once_with()
+        self.calibrate(1.7)
+        self.feed(2.1, MOVED_FACE)
+        self.mouse.move.assert_called_once()
+        self.mouse.click.assert_not_called()
+
+    def test_movement_only_allows_an_external_button_to_remain_held_for_dragging(self):
+        self.app.apply_tracking_settings(replace(self.app.settings, motion_only=True))
+        self.mouse.button_held.return_value = True
+        self.arm_system_pointer()
+        self.feed(0.8, MOVED_FACE)
+
+        self.assertTrue(self.app.active)
+        self.mouse.move.assert_called_once_with(*self.app.position, valid_until=ANY, allow_drag=True)
+        self.mouse.click.assert_not_called()
+        self.mouse.end_control.assert_not_called()
 
     def test_wink_click_is_cancelled_after_another_device_moves_the_pointer(self):
         self.arm_system_pointer()
@@ -1672,6 +1717,7 @@ class PreviewTests(unittest.TestCase):
         other.mouse = Mock()
         other.mouse.emergency_requested.return_value = False
         other.mouse.recenter_requested.return_value = False
+        other.mouse.button_held.return_value = False
 
         def begin_other_control():
             if self.app.active:
@@ -1858,7 +1904,7 @@ class PreviewTests(unittest.TestCase):
         self.assertTrue(self.app.tracker.calibrated)
         self.assert_no_system_input()
         self.feed(1.6)
-        self.mouse.move.assert_called_once_with(0.22, 0.72, valid_until=ANY)
+        self.mouse.move.assert_called_once_with(0.22, 0.72, valid_until=ANY, allow_drag=False)
         self.mouse.click.assert_not_called()
 
     def test_frame_gap_without_a_paused_poll_also_checks_cursor(self):
@@ -2067,7 +2113,7 @@ class PreviewTests(unittest.TestCase):
         self.feed(captured_at, MOVED_FACE, wall_time=deadline)
         self.assertTrue(self.app.active)
         self.assertFalse(self.app.feed_stale)
-        self.mouse.move.assert_called_once_with(*self.app.position, valid_until=deadline)
+        self.mouse.move.assert_called_once_with(*self.app.position, valid_until=deadline, allow_drag=False)
 
     def test_short_wink_with_slow_reopening_does_not_send_system_input(self):
         self.arm_system_pointer()

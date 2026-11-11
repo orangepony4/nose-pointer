@@ -27,6 +27,7 @@ class DwellEyeWidgetTests(unittest.TestCase):
         mouse = Mock()
         mouse.emergency_requested.return_value = False
         mouse.recenter_requested.return_value = False
+        mouse.button_held.return_value = False
         args = SimpleNamespace(camera=0, lang="en", no_clicks=no_clicks, swap_buttons=False)
         with patch.object(tk.Misc, "focus_set"), patch.object(PointerApp, "poll"):
             app = PointerApp(root, mouse, settings, args)

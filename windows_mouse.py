@@ -134,7 +134,7 @@ class PointerMoved(OSError):
 
 
 class MouseButtonHeld(OSError):
-    """A physical mouse button is down before an automatic click."""
+    """A mouse button is down before automatic movement or clicking."""
 
 
 class EmergencyPauseRequested(OSError):
@@ -263,12 +263,16 @@ class WindowsMouse:
         pixel_x, pixel_y, bounds = self._project_pixel(x, y, self._control_layout)
         return self._normalize_position(pixel_x, pixel_y, bounds)
 
-    def move(self, x: float, y: float, *, valid_until: float | None = None) -> tuple[float, float]:
+    def move(
+        self, x: float, y: float, *, valid_until: float | None = None, allow_drag: bool = False,
+    ) -> tuple[float, float]:
         """Move to a visible pixel and return its normalized coordinates."""
         if not math.isfinite(x) or not math.isfinite(y):
             raise ValueError("Cursor coordinates must be finite.")
 
         target_x, target_y, bounds = self._project_pixel(x, y, self._checked_layout())
+        if self._control_lease is not None and not allow_drag and self.button_held():
+            raise MouseButtonHeld
         self._guard_dispatch(valid_until)
         ctypes.set_last_error(0)
         if not self._set_cursor_pos(target_x, target_y):
