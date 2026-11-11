@@ -319,7 +319,7 @@ class PreviewTests(unittest.TestCase):
         self.assertIsNone(self.app.right_dwell_armed_at)
         self.assertEqual(self.app.dwell_bar.configure.call_args.kwargs["value"], 0)
         self.assertFalse(self.app.can_enable)
-        self.save_preference.assert_not_called()
+        self.save_preference.assert_called_once_with("dwell-eye", "right")
 
         right_open = replace(OPEN_FACE, left_blink=0.95)
         self.feed(0.68, right_open, wall_time=0.71)
@@ -334,16 +334,19 @@ class PreviewTests(unittest.TestCase):
         self.select_quick_dwell()
         self.choose_dwell_eye("left")
         self.arm_system_pointer()
+        self.save_preference.reset_mock()
         self.app.dwell_eye_picker.configure.assert_called_with(state="disabled")
         self.choose_dwell_eye("right")
         self.assertEqual(self.app.settings.dwell_eye, "left")
         self.assertEqual(self.app.dwell_eye.get(), self.app.text("dwell_eye_left"))
         self.assertTrue(self.app.tracker.calibrated)
+        self.save_preference.assert_not_called()
 
         self.app.pause()
         self.app.dwell_eye_picker.configure.assert_called_with(state="readonly")
         self.choose_dwell_eye("both")
         self.assertIsNone(self.app.settings.dwell_eye)
+        self.save_preference.assert_called_once_with("dwell-eye", "both")
         self.assert_no_system_input()
 
     def test_mode_choice_recalibrates_from_fresh_frames(self):

@@ -48,7 +48,7 @@ class DwellEyeWidgetTests(unittest.TestCase):
         self.assertEqual(picker.get(), "Правый глаз")
         self.choose(picker, 1)
         self.assertEqual(app.settings.dwell_eye, "left")
-        self.save_preference.assert_not_called()
+        self.save_preference.assert_called_once_with("dwell-eye", "left")
 
         app.update_tracking(0.1, FaceSample(0.5, 0.5, 0.1, 0.95))
         self.clock.return_value = 0.1
@@ -60,17 +60,19 @@ class DwellEyeWidgetTests(unittest.TestCase):
         self.assertEqual(app.settings.dwell_eye, "left")
         app.pause()
         self.assertTrue(picker.instate(["readonly", "!disabled"]))
-        self.choose(picker, 0)
-        self.assertIsNone(app.settings.dwell_eye)
-
         self.choose(app.mode_picker, 0)
         self.assertEqual(app.dwell_controls.winfo_manager(), "")
         self.assertEqual(app.dwell_eye_row.winfo_manager(), "")
         self.choose(app.mode_picker, 1)
         self.assertEqual(app.dwell_controls.winfo_manager(), "pack")
         self.assertEqual(app.dwell_eye_row.winfo_manager(), "grid")
-        self.assertEqual(picker.get(), "Оба глаза")
-        self.assertEqual(self.save_preference.call_args_list, [call("click-mode", WINK_MODE), call("click-mode", DWELL_MODE)])
+        self.assertEqual(picker.get(), "Левый глаз")
+        self.choose(picker, 0)
+        self.assertIsNone(app.settings.dwell_eye)
+        self.assertEqual(self.save_preference.call_args_list, [
+            call("dwell-eye", "left"), call("click-mode", WINK_MODE),
+            call("click-mode", DWELL_MODE), call("dwell-eye", "both"),
+        ])
         self.assertEqual(app.root.state(), "withdrawn")
         self.assertFalse(app.root.winfo_viewable())
         mouse.move.assert_not_called()

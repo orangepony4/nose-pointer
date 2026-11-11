@@ -186,8 +186,8 @@ MESSAGES = {
     "cli_dwell": ("start in dwell mode with a 600–5000 ms delay", "открыть режим задержки с интервалом от 600 до 5000 мс"),
     "cli_dwell_invalid": ("Dwell delay must be between 600 and 5000 ms.", "Задержка клика должна быть от 600 до 5000 мс."),
     "cli_dwell_eye": (
-        "start in dwell mode and require only the chosen eye to stay open",
-        "открыть режим задержки, в котором достаточно держать выбранный глаз открытым",
+        "start in dwell mode and select which eyes must stay open for this launch",
+        "запустить режим задержки и указать, какие глаза держать открытыми в этом сеансе",
     ),
     "cli_dwell_eye_conflict": (
         "Choose --dwell-eye for dwell clicks or --no-clicks for motion only.",

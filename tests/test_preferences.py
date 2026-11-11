@@ -100,6 +100,42 @@ class PreferencesTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 2)
         self.assertIn("Выберите --dwell-eye для кликов по задержке", stderr.getvalue())
 
+    def test_saved_dwell_eye_is_restored_and_cli_can_override_it_for_one_launch(self):
+        save_preference("click-mode", DWELL_MODE)
+        save_preference("dwell-eye", "left")
+        path = self.directory / "dwell-eye.txt"
+
+        settings, _ = self.launch()
+        self.assertEqual((settings.dwell_eye, settings.dwell_seconds), ("left", 1.2))
+        for override, expected in (("right", "right"), ("both", None)):
+            with self.subTest(override=override):
+                settings, _ = self.launch("--dwell-eye", override)
+                self.assertEqual((settings.dwell_eye, settings.dwell_seconds), (expected, 1.2))
+                self.assertEqual(path.read_bytes(), b"left\n")
+
+        save_preference("click-mode", MOTION_MODE)
+        settings, _ = self.launch()
+        self.assertTrue(settings.motion_only)
+        self.assertEqual((settings.dwell_eye, settings.dwell_seconds), ("left", None))
+        settings, _ = self.launch("--dwell-ms", "850")
+        self.assertEqual((settings.dwell_eye, settings.dwell_seconds), ("left", 0.85))
+        self.assertEqual(path.read_bytes(), b"left\n")
+
+    def test_missing_or_invalid_dwell_eye_uses_both_eyes_without_changing_other_preferences(self):
+        save_preference("click-mode", DWELL_MODE)
+        save_preference("dwell-ms", 950)
+        path = self.directory / "dwell-eye.txt"
+        for saved in (None, b"both\n", b"third", b"LEFT", b"right\nleft", b"\xff", b"left" + b"x" * 40):
+            with self.subTest(saved=saved):
+                if saved is not None:
+                    path.write_bytes(saved)
+                settings, _ = self.launch()
+                self.assertEqual((settings.dwell_eye, settings.dwell_seconds), (None, 0.95))
+                if saved is None:
+                    self.assertFalse(path.exists())
+                else:
+                    self.assertEqual(path.read_bytes(), saved)
+
     def test_bad_preference_does_not_hide_other_valid_choices(self):
         save_preference("sensitivity", "sensitivity_low")
         save_preference("click-mode", DWELL_MODE)

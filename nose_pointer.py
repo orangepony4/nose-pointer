@@ -27,7 +27,8 @@ WINK_MODE = "wink"
 DWELL_MODE = "dwell"
 MOTION_MODE = "motion"
 CLICK_MODES = (WINK_MODE, DWELL_MODE, MOTION_MODE)
-DWELL_EYES = {"dwell_eye_both": None, "dwell_eye_left": "left", "dwell_eye_right": "right"}
+DWELL_EYE_CHOICES = {"both": None, "left": "left", "right": "right"}
+DWELL_EYES = {f"dwell_eye_{choice}": eye for choice, eye in DWELL_EYE_CHOICES.items()}
 CHOICE_GAP = 9
 SENSITIVITY_PRESETS = {
     "sensitivity_low": (0.18, 0.15, Settings.dead_zone),
@@ -662,7 +663,9 @@ class PointerApp:
         if self.active or self.args.no_clicks or self.settings.dwell_seconds is None or choice is None:
             self.dwell_eye.set(self.dwell_eye_text())
             return
-        self.apply_tracking_settings(replace(self.settings, dwell_eye=DWELL_EYES[choice]), require_fresh_frames=True)
+        eye = DWELL_EYES[choice]
+        self.apply_tracking_settings(replace(self.settings, dwell_eye=eye), require_fresh_frames=True)
+        save_preference("dwell-eye", eye or "both")
 
     def change_sensitivity(self, _event=None):
         if self.active:
@@ -1047,10 +1050,11 @@ def load_tracking_settings(args):
         if not MIN_DWELL_MS <= dwell_ms <= MAX_DWELL_MS:
             dwell_ms = DEFAULT_DWELL_MS
 
+    dwell_eye = DWELL_EYE_CHOICES.get(args.dwell_eye or load_text_preference("dwell-eye"))
     settings = Settings(mirror=not args.no_mirror, range_x=range_x, range_y=range_y,
                         dead_zone=dead_zone, wink_min_seconds=args.wink_ms / 1000,
                         dwell_seconds=dwell_ms / 1000 if mode == DWELL_MODE else None,
-                        motion_only=mode == MOTION_MODE, dwell_eye=args.dwell_eye)
+                        motion_only=mode == MOTION_MODE, dwell_eye=dwell_eye)
     return settings, dwell_ms
 
 
@@ -1077,7 +1081,7 @@ def main(argv=None):
     clicks = parser.add_mutually_exclusive_group()
     clicks.add_argument("--no-clicks", action="store_true", help=text("cli_no_clicks"))
     clicks.add_argument("--dwell-ms", type=int, help=text("cli_dwell"))
-    parser.add_argument("--dwell-eye", choices=("left", "right"), help=text("cli_dwell_eye"))
+    parser.add_argument("--dwell-eye", choices=DWELL_EYE_CHOICES, help=text("cli_dwell_eye"))
     args = parser.parse_args(argv)
     if args.lang is None and not (args.download_model or args.check):
         args.lang = load_language()

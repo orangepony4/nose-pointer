@@ -24,7 +24,7 @@ uv run --locked nose_pointer.py
 
 Nose Pointer opens in English on first launch. Use **Language** to switch to **Русский** before enabling system control or while in practice mode. Switching keeps your practice position and settings. The app saves the language preference in `%LOCALAPPDATA%\NosePointer\language.txt`.
 
-The app remembers the sensitivity preset, click mode and dwell delay you choose. Each launch still starts with the camera and system control off. The command-line options `--range-x`, `--range-y`, `--no-clicks` and `--dwell-ms` override saved choices for that launch.
+The app remembers the sensitivity preset, click mode, dwell delay and dwell eye you choose. Each launch starts with the camera and system control off. The command-line options `--range-x`, `--range-y`, `--no-clicks`, `--dwell-ms` and `--dwell-eye` override saved choices for that launch.
 
 1. Select **Open camera** (Открыть камеру). The violet dot is a practice pointer. Your Windows cursor stays under your usual control.
 2. Look straight ahead while the app calibrates and follow the eye instructions in the status. Try moving the dot. If you use a click mode, try it in the practice area and look for the recognized click below it.
@@ -47,15 +47,15 @@ Use **Click mode** (Режим клика) in practice mode.
 
 #### Dwell with one eye open
 
-In practice mode, choose **Dwell** under **Click mode**. Use **Eye for dwell** to select **Left eye**, **Right eye**, or **Both eyes**. Left and right mean your own eyes. Keep the selected eye open during calibration and while moving the pointer. Closing it resets the click timer. Changing the eye choice cancels pending clicks and starts a fresh calibration. The choice lasts until you close the app.
+In practice mode, choose **Dwell** under **Click mode**. Use **Eye for dwell** to select **Left eye**, **Right eye**, or **Both eyes**. Left and right mean your own eyes. Keep the selected eye open during calibration and while moving the pointer. Closing it resets the click timer. Changing the eye choice cancels pending clicks and starts a fresh calibration. The app saves your choice for the next time you use Dwell.
 
-Version 0.11.0 or newer also lets you start Dwell with one eye selected. Open PowerShell in the extracted folder and run the launcher with your choice.
+To override the saved eye for one launch, open PowerShell in the extracted folder and run the launcher with your choice.
 
 ```powershell
 & '.\Start Nose Pointer.cmd' --dwell-eye left
 ```
 
-Use `left` or `right`. Add `--dwell-ms 1600` to set a different delay from your saved choice.
+Use `left`, `right` or `both`. Add `--dwell-ms 1600` to override your saved delay as well.
 
 ### Recalibrate and recover
 
@@ -130,7 +130,7 @@ uv run --locked nose_pointer.py
 
 При первом запуске интерфейс открывается на английском. Выберите **Language → Русский** до включения системной мыши или в режиме пробы. Настройки и положение тестового указателя сохранятся. Язык запоминается в файле `%LOCALAPPDATA%\NosePointer\language.txt`.
 
-Приложение запоминает выбранный профиль чувствительности, режим клика и задержку. При каждом запуске камера и системное управление выключены. Параметры командной строки `--range-x`, `--range-y`, `--no-clicks` и `--dwell-ms` имеют приоритет над сохранёнными настройками на время текущего запуска.
+Приложение запоминает профиль чувствительности, режим клика, задержку и выбор глаза. При каждом запуске камера и системное управление выключены. Параметры командной строки `--range-x`, `--range-y`, `--no-clicks`, `--dwell-ms` и `--dwell-eye` имеют приоритет над сохранёнными настройками на время текущего запуска.
 
 1. Нажмите **Открыть камеру**. В режиме пробы фиолетовая точка движется в окне, а курсор Windows остаётся под вашим обычным управлением.
 2. Смотрите прямо во время калибровки и следуйте подсказкам в строке состояния. Попробуйте подвигать точку. Если вы выбрали режим клика, попробуйте его в тестовом поле. Под полем появится распознанный клик.
@@ -153,15 +153,15 @@ uv run --locked nose_pointer.py
 
 #### Задержка с одним открытым глазом
 
-В режиме пробы выберите **Задержка курсора** в списке **Режим клика**. В списке **Глаз для задержки** доступны **Левый глаз**, **Правый глаз** и **Оба глаза**. Левая и правая стороны указаны с вашей точки зрения. Держите выбранный глаз открытым при калибровке и движении указателя. Если он закроется, отсчёт клика сбросится. Смена глаза отменяет ожидающие клики и запускает калибровку заново. Выбор действует до закрытия программы.
+В режиме пробы выберите **Задержка курсора** в списке **Режим клика**. В списке **Глаз для задержки** доступны **Левый глаз**, **Правый глаз** и **Оба глаза**. Левая и правая стороны указаны с вашей точки зрения. Держите выбранный глаз открытым при калибровке и движении указателя. Если он закроется, отсчёт клика сбросится. Смена глаза отменяет ожидающие клики и запускает калибровку заново. Приложение сохраняет этот выбор до следующего использования режима задержки.
 
-Начиная с версии 0.11.0, можно сразу запустить задержку с выбранным глазом. Откройте PowerShell в распакованной папке и запустите программу с нужным параметром.
+Чтобы сменить выбранный глаз на один запуск, откройте PowerShell в распакованной папке и запустите программу с нужным параметром.
 
 ```powershell
 & '.\Start Nose Pointer.cmd' --dwell-eye left
 ```
 
-Укажите `left` или `right`. Чтобы задать задержку на этот запуск, добавьте `--dwell-ms 1600`.
+Укажите `left`, `right` или `both`. Чтобы также задать задержку на этот запуск, добавьте `--dwell-ms 1600`.
 
 ### Калибровка и восстановление управления
 
