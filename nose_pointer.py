@@ -35,6 +35,7 @@ SENSITIVITY_PRESETS = {
     "sensitivity_standard": (Settings.range_x, Settings.range_y, Settings.dead_zone),
     "sensitivity_high": (0.065, 0.054, Settings.dead_zone),
 }
+HORIZONTAL_DIRECTIONS = {"direction_mirrored": True, "direction_direct": False}
 DEFAULT_DWELL_MS = 1200
 MIN_DWELL_MS = 600
 MAX_DWELL_MS = 5000
@@ -104,7 +105,7 @@ class PointerApp:
         root.configure(bg=BACKGROUND)
         extra_scale = max(0.0, root.winfo_fpixels("1i") / 96 - 1)
         width = min(round(580 + 160 * extra_scale), root.winfo_screenwidth() - 32)
-        height = min(round(626 + 405 * extra_scale), root.winfo_screenheight() - 64)
+        height = min(round(662 + 405 * extra_scale), root.winfo_screenheight() - 64)
         root.geometry(f"{width}x{height}")
         root.minsize(width - 20, height - 25)
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -197,6 +198,17 @@ class PointerApp:
                                                values=self.choice_labels(self.sensitivity_presets), width=12, state="readonly")
         self.layout_choice(sensitivity_row, sensitivity_label, self.sensitivity_picker)
         self.sensitivity_picker.bind("<<ComboboxSelected>>", self.change_sensitivity)
+
+        direction_row = tk.Frame(settings_controls, bg=BACKGROUND)
+        direction_row.pack(fill="x", pady=(0, 8))
+        direction_label = self.make_label(direction_row, "direction", font=("Segoe UI", 10), fg=INK)
+        self.direction = tk.StringVar(value=self.direction_text())
+        self.direction_picker = ttk.Combobox(
+            direction_row, textvariable=self.direction, values=self.choice_labels(HORIZONTAL_DIRECTIONS),
+            width=12, state="readonly",
+        )
+        self.layout_choice(direction_row, direction_label, self.direction_picker)
+        self.direction_picker.bind("<<ComboboxSelected>>", self.change_direction)
 
         self.click_controls = tk.Frame(settings_controls, bg=BACKGROUND)
         self.click_controls.pack(fill="x")
@@ -308,7 +320,7 @@ class PointerApp:
         root.bind("<Prior>", lambda _event: self.scroll_workspace(-1, "pages"))
         root.bind("<Next>", lambda _event: self.scroll_workspace(1, "pages"))
         # In a scrolling workspace, a wheel over a picker should scroll the view.
-        for picker in (self.language_picker, self.sensitivity_picker, self.mode_picker,
+        for picker in (self.language_picker, self.sensitivity_picker, self.direction_picker, self.mode_picker,
                        self.delay_picker, self.dwell_eye_picker, self.camera_picker):
             picker.bind("<MouseWheel>", self.scroll_workspace_wheel, add="+")
             for key in BUTTON_ACTION_KEYS:
@@ -574,6 +586,9 @@ class PointerApp:
     def dwell_eye_text(self):
         return self.text(f"dwell_eye_{self.settings.dwell_eye or 'both'}")
 
+    def direction_text(self):
+        return self.text("direction_mirrored" if self.settings.mirror else "direction_direct")
+
     def change_language(self, _event=None):
         language = next((key for key, label in LANGUAGES.items() if label == self.language_choice.get()), None)
         if self.active or language is None:
@@ -593,6 +608,8 @@ class PointerApp:
         self.dwell_eye_picker.configure(values=self.choice_labels(DWELL_EYES))
         self.sensitivity.set(self.text(preset))
         self.sensitivity_picker.configure(values=self.choice_labels(self.sensitivity_presets))
+        self.direction.set(self.direction_text())
+        self.direction_picker.configure(values=self.choice_labels(HORIZONTAL_DIRECTIONS))
         self.click_mode.set(self.text(self.selected_click_mode()))
         self.mode_picker.configure(values=self.choice_labels(CLICK_MODES))
         for label, key in self.static_labels:
@@ -700,6 +717,16 @@ class PointerApp:
         self.apply_tracking_settings(replace(self.settings, range_x=range_x, range_y=range_y, dead_zone=dead_zone))
         if preset in SENSITIVITY_PRESETS:
             save_preference("sensitivity", preset)
+
+    def change_direction(self, _event=None):
+        choice = self.choice_key(self.direction, HORIZONTAL_DIRECTIONS)
+        if self.active or choice is None:
+            self.direction.set(self.direction_text())
+            return
+        self.apply_tracking_settings(
+            replace(self.settings, mirror=HORIZONTAL_DIRECTIONS[choice]), require_fresh_frames=True,
+        )
+        save_preference("horizontal-direction", choice)
 
     def apply_tracking_settings(self, settings, *, require_fresh_frames=False):
         if settings == self.settings:
@@ -811,6 +838,7 @@ class PointerApp:
             self.last_active_face_at = now
             self.language_picker.configure(state="disabled")
             self.sensitivity_picker.configure(state="disabled")
+            self.direction_picker.configure(state="disabled")
             self.mode_picker.configure(state="disabled")
             self.delay_picker.configure(state="disabled")
             self.dwell_eye_picker.configure(state="disabled")
@@ -875,6 +903,7 @@ class PointerApp:
         self.reset_calibration()
         self.language_picker.configure(state="readonly")
         self.sensitivity_picker.configure(state="readonly")
+        self.direction_picker.configure(state="readonly")
         self.mode_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
         self.delay_picker.configure(state="readonly")
         self.dwell_eye_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
@@ -1087,7 +1116,9 @@ def load_tracking_settings(args):
             dwell_ms = DEFAULT_DWELL_MS
 
     dwell_eye = DWELL_EYE_CHOICES.get(args.dwell_eye or load_text_preference("dwell-eye"))
-    settings = Settings(mirror=not args.no_mirror, range_x=range_x, range_y=range_y,
+    saved_direction = load_text_preference("horizontal-direction")
+    mirror = not args.no_mirror and HORIZONTAL_DIRECTIONS.get(saved_direction, Settings.mirror)
+    settings = Settings(mirror=mirror, range_x=range_x, range_y=range_y,
                         dead_zone=dead_zone, wink_min_seconds=args.wink_ms / 1000,
                         dwell_seconds=dwell_ms / 1000 if mode == DWELL_MODE else None,
                         motion_only=mode == MOTION_MODE, dwell_eye=dwell_eye)

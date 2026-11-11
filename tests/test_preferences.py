@@ -78,6 +78,27 @@ class PreferencesTests(unittest.TestCase):
         self.assertIsNone(settings.dwell_seconds)
         self.assertEqual(delay, 800)
 
+    def test_saved_horizontal_direction_and_transient_cli_override(self):
+        path = self.directory / "horizontal-direction.txt"
+        save_preference("horizontal-direction", "direction_direct")
+        settings, _ = self.launch()
+        self.assertFalse(settings.mirror)
+        self.assertEqual(path.read_bytes(), b"direction_direct\n")
+
+        save_preference("horizontal-direction", "direction_mirrored")
+        settings, _ = self.launch("--no-mirror")
+        self.assertFalse(settings.mirror)
+        settings, _ = self.launch()
+        self.assertTrue(settings.mirror)
+        self.assertEqual(path.read_bytes(), b"direction_mirrored\n")
+
+        for invalid in (b"other", b"Direct", b"\xff", b"x" * 40):
+            with self.subTest(invalid=invalid):
+                path.write_bytes(invalid)
+                settings, _ = self.launch()
+                self.assertTrue(settings.mirror)
+                self.assertEqual(path.read_bytes(), invalid)
+
     def test_one_eye_dwell_uses_saved_delay_and_stays_transient(self):
         save_preference("click-mode", MOTION_MODE)
         save_preference("dwell-ms", 950)

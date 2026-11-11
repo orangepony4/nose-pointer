@@ -24,7 +24,7 @@ uv run --locked nose_pointer.py
 
 Nose Pointer opens in English on first launch. Use **Language** to switch to **Русский** before enabling system control or while in practice mode. Switching keeps your practice position and settings. The app saves the language preference in `%LOCALAPPDATA%\NosePointer\language.txt`.
 
-The app remembers the sensitivity preset, click mode, dwell delay and dwell eye you choose. Each launch starts with the camera and system control off. The command-line options `--range-x`, `--range-y`, `--no-clicks`, `--dwell-ms` and `--dwell-eye` override saved choices for that launch.
+The app remembers the sensitivity preset, horizontal movement, click mode, dwell delay and dwell eye you choose. Each launch starts with the camera and system control off. The command-line options `--range-x`, `--range-y`, `--no-mirror`, `--no-clicks`, `--dwell-ms` and `--dwell-eye` override saved choices for that launch.
 
 1. Select **Open camera** (Открыть камеру). The violet dot is a practice pointer. Your Windows cursor stays under your usual control.
 2. Look straight ahead while the app calibrates and follow the eye instructions in the status. Try moving the dot. If you use a click mode, try it in the practice area and look for the recognized click below it.
@@ -63,6 +63,8 @@ While the camera is on, select **Recalibrate** above the practice pad. In practi
 
 In practice mode, use **Sensitivity** (Чувствительность) to tune the amount of head movement. **High** (Высокая) needs less movement, and **Low** (Низкая) gives finer control. Changing sensitivity starts a fresh calibration.
 
+Use **Horizontal movement** in practice mode if the pointer moves left when you expect it to move right. **Mirrored** uses the default mirror direction, and **Direct** follows the camera image. Changing the setting starts a fresh calibration and cancels pending clicks.
+
 When you enable mouse control or request recalibration, the app uses camera frames captured from that moment onward. If you adjust your pose during desktop calibration, keep your final pose briefly as calibration finishes. The current cursor position is the starting point for your next movement.
 
 A short loss of tracking pauses input. The app also checks frame freshness immediately before sending a movement or click and waits for fresh frames if the current one has expired. Bring your face back into view and follow the eye prompt for your click mode. If another device moved the cursor during the pause, the app recalibrates at that location. After five seconds without an accepted face frame, Nose Pointer returns to practice mode and requires explicit re-enabling. The app also returns to practice if it sees multiple faces, an abrupt jump, or a face reappearing far from its last position. An abrupt jump can stop control even if the face returns to its previous position before the interface refreshes. Keep one person in view. Tracking loss or a pause clears dwell progress and any pending right click.
@@ -85,7 +87,7 @@ uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-
 - `--range-x` and `--range-y` set the fraction of the frame you move from the neutral pose to reach a screen edge. Smaller values increase sensitivity. A custom pair appears as **Custom** (Своя) in the sensitivity menu.
 - `--wink-ms` sets the minimum wink duration. The default is 220 ms.
 - `--dwell-ms 1600` starts in dwell mode. The supported range is 600–5000 ms.
-- `--no-mirror` reverses the horizontal mapping. `--swap-buttons` swaps the left and right wink actions. `--no-clicks` starts and locks the app in motion-only mode.
+- `--no-mirror` starts with **Direct** horizontal movement for this launch. `--swap-buttons` swaps the left and right wink actions. `--no-clicks` starts and locks the app in motion-only mode.
 - `--lang ru` or `--lang en` overrides the saved language for that launch.
 
 ### Privacy and testing
@@ -132,7 +134,7 @@ uv run --locked nose_pointer.py
 
 При первом запуске интерфейс открывается на английском. Выберите **Language → Русский** до включения системной мыши или в режиме пробы. Настройки и положение тестового указателя сохранятся. Язык запоминается в файле `%LOCALAPPDATA%\NosePointer\language.txt`.
 
-Приложение запоминает профиль чувствительности, режим клика, задержку и выбор глаза. При каждом запуске камера и системное управление выключены. Параметры командной строки `--range-x`, `--range-y`, `--no-clicks`, `--dwell-ms` и `--dwell-eye` имеют приоритет над сохранёнными настройками на время текущего запуска.
+Приложение запоминает профиль чувствительности, направление по горизонтали, режим клика, задержку и выбор глаза. При каждом запуске камера и системное управление выключены. Параметры командной строки `--range-x`, `--range-y`, `--no-mirror`, `--no-clicks`, `--dwell-ms` и `--dwell-eye` имеют приоритет над сохранёнными настройками на время текущего запуска.
 
 1. Нажмите **Открыть камеру**. В режиме пробы фиолетовая точка движется в окне, а курсор Windows остаётся под вашим обычным управлением.
 2. Смотрите прямо во время калибровки и следуйте подсказкам в строке состояния. Попробуйте подвигать точку. Если вы выбрали режим клика, попробуйте его в тестовом поле. Под полем появится распознанный клик.
@@ -171,6 +173,8 @@ uv run --locked nose_pointer.py
 
 В режиме пробы настройте **Чувствительность**. **Высокая** требует меньших движений головы, а **Низкая** помогает точнее наводить указатель. Смена чувствительности запускает калибровку заново.
 
+Если указатель движется влево, когда вы ожидаете движение вправо, измените настройку **По горизонтали** в режиме пробы. **Зеркально** работает как отражение в зеркале, а **Напрямую** повторяет движение в кадре камеры. При смене настройки приложение начинает калибровку заново и отменяет ожидающие клики.
+
 После включения управления мышью или запроса повторной калибровки приложение использует кадры, снятые с этого момента. Если сменили позу при калибровке системной мыши, ненадолго задержитесь в новой позе до её завершения. Следующее движение начнётся с текущей позиции указателя.
 
 При краткой потере отслеживания ввод приостанавливается. Приложение также проверяет свежесть кадра непосредственно перед движением или кликом и ждёт новых кадров, если текущий устарел. Верните лицо в кадр и следуйте подсказке для выбранного режима клика. Если за время паузы указатель переместили другим устройством, программа откалибруется на новом месте. Через пять секунд без принятого кадра с лицом приложение возвращается в режим пробы. Для возобновления системного ввода снова нажмите **Включить мышь**. Программа также возвращается в режим пробы, если видит несколько лиц, резкое смещение или лицо, которое снова появилось далеко от прежнего положения. Резкое смещение может отключить управление, даже если лицо уже вернулось на прежнее место к следующему обновлению интерфейса. Оставляйте в кадре одного человека. Потеря отслеживания или пауза отменяет отсчёт задержки и выбранный правый клик.
@@ -193,7 +197,7 @@ uv run --locked nose_pointer.py --camera 1 --range-x 0.09 --range-y 0.08 --wink-
 - `--range-x` и `--range-y` задают долю кадра, которую нужно пройти от нейтральной позиции до края экрана. Меньшие значения повышают чувствительность. Своя пара значений появится в списке **Чувствительность** как **Своя**.
 - `--wink-ms` задаёт минимальную длительность подмигивания. По умолчанию это 220 мс.
 - `--dwell-ms 1600` открывает режим задержки и задаёт время ожидания от 600 до 5000 мс.
-- `--no-mirror` меняет горизонтальное направление. `--swap-buttons` меняет местами левый и правый клики подмигиванием. `--no-clicks` запускает приложение в режиме **Только движение** и блокирует выбор других режимов.
+- `--no-mirror` выбирает движение **Напрямую** по горизонтали на один запуск. `--swap-buttons` меняет местами левый и правый клики подмигиванием. `--no-clicks` запускает приложение в режиме **Только движение** и блокирует выбор других режимов.
 - `--lang ru` или `--lang en` переопределяет сохранённый язык для этого запуска.
 
 ### Приватность и проверки

@@ -68,7 +68,7 @@ class PreviewTests(unittest.TestCase):
         self.buttons = [Mock() for _ in range(4)]
         frame = Mock(winfo_width=Mock(return_value=500))
         label = Mock(winfo_reqwidth=Mock(return_value=80))
-        combos = [Mock(winfo_reqwidth=Mock(return_value=100)) for _ in range(5)]
+        combos = [Mock(winfo_reqwidth=Mock(return_value=100)) for _ in range(6)]
         with (
             patch.multiple("nose_pointer.tk", Frame=Mock(return_value=frame), Label=Mock(return_value=label),
                            Canvas=Mock(side_effect=[workspace, pad]), StringVar=StringValue),
@@ -499,6 +499,61 @@ class PreviewTests(unittest.TestCase):
         self.assertIs(self.app.tracker, tracker)
         self.app.pause()
         self.app.sensitivity_picker.configure.assert_called_with(state="readonly")
+
+    def test_horizontal_direction_reverses_only_x_after_fresh_calibration(self):
+        self.select_quick_dwell()
+        self.calibrate(0)
+        self.feed(0.40, MOVED_FACE)
+        mirrored = self.app.position
+        self.assertLess(mirrored[0], 0.5)
+        self.app.toggle_right_dwell()
+        self.assertIsNotNone(self.app.right_dwell_armed_at)
+        self.save_preference.reset_mock()
+
+        self.clock.return_value = 0.50
+        picker = self.app.direction_picker
+        self.app.direction.set("Direct")
+        selected = next(binding.args[1] for binding in picker.bind.call_args_list
+                        if binding.args[0] == "<<ComboboxSelected>>")
+        selected(SimpleNamespace(widget=picker))
+        self.assertFalse(self.app.settings.mirror)
+        self.assertFalse(self.app.can_enable)
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.assertEqual(self.app.position, (0.5, 0.5))
+        self.save_preference.assert_called_once_with("horizontal-direction", "direction_direct")
+
+        self.feed(0.49, MOVED_FACE, wall_time=0.51)
+        for now in (0.51, 0.61, 0.71, 0.80):
+            self.feed(now)
+        self.assertFalse(self.app.can_enable)
+        self.feed(0.82)
+        self.assertTrue(self.app.can_enable)
+        self.feed(0.93, MOVED_FACE)
+        self.assertAlmostEqual(self.app.position[0], 1 - mirrored[0])
+        self.assertEqual(self.app.position[1], mirrored[1])
+
+        self.app.language_choice.set("Русский")
+        self.app.change_language()
+        self.assertEqual(self.app.direction.get(), "Напрямую")
+        self.app.direction_picker.configure.assert_called_with(values=("Зеркально", "Напрямую"))
+        self.assertFalse(self.app.settings.mirror)
+        self.assertTrue(self.app.tracker.calibrated)
+        self.assert_no_system_input()
+
+    def test_horizontal_direction_is_locked_while_the_system_pointer_is_active(self):
+        self.arm_system_pointer()
+        self.app.direction_picker.configure.assert_called_with(state="disabled")
+        tracker = self.app.tracker
+        self.app.direction.set("Direct")
+        self.app.change_direction()
+        self.assertIs(self.app.tracker, tracker)
+        self.assertEqual(self.app.direction.get(), "Mirrored")
+        self.assertTrue(self.app.settings.mirror)
+        self.save_preference.assert_not_called()
+        self.assert_no_system_input()
+
+        self.app.pause()
+        self.app.direction_picker.configure.assert_called_with(state="readonly")
 
     def test_custom_ranges_are_selectable_again_even_with_clicks_disabled(self):
         settings = replace(self.app.settings, range_x=0.045, range_y=0.075, motion_only=True)

@@ -86,6 +86,7 @@ class CompactLayoutTests(unittest.TestCase):
         self.assertGreater(app.pad.winfo_height(), app.pad.winfo_reqheight())
         self.assert_widget_fits(app.delay_picker, app.workspace)
         self.assert_widget_fits(app.dwell_eye_picker, app.workspace)
+        self.assert_widget_fits(app.direction_picker, app.workspace)
         self.assert_widget_fits(app.pointer_button, app.root)
         self.assertEqual(mouse.mock_calls, [])
 
@@ -127,7 +128,7 @@ class CompactLayoutTests(unittest.TestCase):
                             self.assert_widget_fits(focused, app.workspace if app.in_workspace(focused) else root)
                             if focused is app.camera_button:
                                 break
-                        self.assertTrue({app.language_picker, app.sensitivity_picker, app.mode_picker,
+                        self.assertTrue({app.language_picker, app.sensitivity_picker, app.direction_picker, app.mode_picker,
                                          app.delay_picker, app.right_dwell_button, app.dwell_eye_picker,
                                          app.pointer_button, app.recenter_button} <= visited)
                         self.assertEqual(app.recenter_button.cget("text"), app.text("recalibrate"))
@@ -137,6 +138,7 @@ class CompactLayoutTests(unittest.TestCase):
                             app.pointer_button.invoke()
                         root.update()
                         self.assertTrue(app.active)
+                        self.assertTrue(app.direction_picker.instate(["disabled"]))
                         self.assert_widget_fits(app.pointer_button, root)
                         self.assert_widget_fits(app.hotkey_label, root)
                         app.recenter_button.focus_force()
@@ -152,7 +154,8 @@ class CompactLayoutTests(unittest.TestCase):
                         self.assert_widget_fits(app.footer_notice_label, root)
                         for widget in fixed_actions:
                             self.assert_widget_fits(widget, root)
-                        for widget in (app.language_picker, app.mode_picker, app.delay_picker, app.dwell_eye_picker):
+                        for widget in (app.language_picker, app.direction_picker, app.mode_picker,
+                                       app.delay_picker, app.dwell_eye_picker):
                             widget.focus_force()
                             root.update()
                             self.assert_widget_fits(widget, app.workspace)
