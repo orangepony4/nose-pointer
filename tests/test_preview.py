@@ -65,7 +65,7 @@ class PreviewTests(unittest.TestCase):
         pad = Mock()
         pad.winfo_width.return_value = 200
         pad.winfo_height.return_value = 150
-        self.buttons = [Mock(), Mock(), Mock()]
+        self.buttons = [Mock() for _ in range(4)]
         frame = Mock(winfo_width=Mock(return_value=500))
         label = Mock(winfo_reqwidth=Mock(return_value=80))
         combos = [Mock(winfo_reqwidth=Mock(return_value=100)) for _ in range(5)]
@@ -632,6 +632,97 @@ class PreviewTests(unittest.TestCase):
         self.feed(requested_at + 0.39, MOVED_FACE)
         self.mouse.move.assert_called_once()
         self.mouse.click.assert_not_called()
+
+    def test_recalibrate_button_restarts_practice_without_using_the_system_mouse(self):
+        self.calibrate(0)
+        self.feed(0.4, MOVED_FACE)
+        self.assertNotEqual(self.app.position, (0.5, 0.5))
+        button = self.app.recenter_button
+        button.configure.assert_any_call(state="normal")
+        button.cget.return_value = "Recalibrate"
+        button.instate.return_value = True
+        button.invoke.side_effect = self.app.restart_calibration
+        self.root.focus_get.return_value = button
+        bindings = dict(call.args for call in button.bind.call_args_list)
+        event = SimpleNamespace(widget=button, keysym="space", state=0)
+
+        self.clock.return_value = 0.57
+        for _ in range(4):
+            bindings["<KeyPress-space>"](event)
+        self.assertTrue(self.app.tracker.calibrated)
+        bindings["<KeyRelease-space>"](event)
+        bindings["<KeyRelease-space>"](event)
+        button.invoke.assert_called_once_with()
+        self.assertFalse(self.app.can_enable)
+        self.app.pointer_button.configure.assert_called_with(state="disabled")
+        self.assertEqual(self.app.position, (0.5, 0.5))
+
+        self.feed(0.49, OPEN_FACE, wall_time=0.58)
+        self.assertEqual(self.app.status.get(), self.app.text("status_recenter"))
+        for now in (0.58, 0.69, 0.79):
+            self.feed(now, MOVED_FACE)
+        self.assertFalse(self.app.tracker.calibrated)
+        self.feed(0.90, MOVED_FACE)
+        self.assertTrue(self.app.can_enable)
+        self.assertEqual(self.app.position, (0.5, 0.5))
+        self.assertEqual(self.mouse.mock_calls, [])
+
+    def test_recalibrate_button_preserves_active_control_and_discards_an_armed_dwell(self):
+        self.select_quick_dwell()
+        self.arm_system_pointer()
+        self.app.toggle_right_dwell()
+        self.feed(0.80)
+        for now in (0.94, 1.06, 1.12):
+            self.feed(now, MOVED_FACE)
+        self.assertIsNotNone(self.app.right_dwell_armed_at)
+        self.assertGreater(self.app.dwell_bar.configure.call_args.kwargs["value"], 0)
+        anchor = (0.25, 0.7)
+        self.mouse.position.return_value = anchor
+        self.mouse.reset_mock()
+        self.clock.return_value = 1.2
+        self.app.restart_calibration()
+        self.assertTrue(self.app.active)
+        self.assertIsNone(self.app.right_dwell_armed_at)
+        self.app.dwell_bar.configure.assert_called_with(value=0)
+        self.feed(1.15, OPEN_FACE, wall_time=1.21)
+        for now in (1.22, 1.34, 1.44, 1.54):
+            self.feed(now, MOVED_FACE)
+        self.assertTrue(self.app.tracker.calibrated)
+        self.assertEqual(self.app.position, anchor)
+        self.assert_no_system_input()
+        self.mouse.end_control.assert_not_called()
+        for now in (1.65, 1.84, 2.03, 2.22, 2.41, 2.60):
+            self.feed(now, MOVED_FACE)
+        self.mouse.move.assert_called_with(*anchor, valid_until=ANY)
+        self.mouse.click.assert_not_called()
+
+    def test_recalibrate_button_yields_to_an_emergency_pause_and_to_camera_shutdown(self):
+        self.arm_system_pointer()
+        self.mouse.emergency_requested.return_value = True
+        self.app.restart_calibration()
+        self.assertFalse(self.app.active)
+        self.assertEqual(self.app.status.get(), self.app.text("status_paused"))
+        self.assert_no_system_input()
+
+        self.camera.thread.is_alive.return_value = False
+        with patch.object(self.app, "recenter") as recenter:
+            self.app.restart_calibration()
+            recenter.assert_not_called()
+        self.camera.snapshot.return_value = (None, None)
+        self.app.poll()
+        self.assertIsNone(self.app.camera)
+        self.app.recenter_button.configure.assert_called_with(state="disabled")
+
+        self.camera.thread.is_alive.return_value = True
+        with patch("nose_pointer.Camera", return_value=self.camera):
+            self.app.toggle_camera()
+        self.app.recenter_button.configure.assert_called_with(state="normal")
+        self.app.toggle_camera()
+        self.camera.stop_event.is_set.return_value = True
+        self.app.recenter_button.configure.assert_called_with(state="disabled")
+        with patch.object(self.app, "recenter") as recenter:
+            self.app.restart_calibration()
+            recenter.assert_not_called()
 
     def test_focused_f9_recalibrates_once_and_does_not_send_the_pending_wink(self):
         shortcut = next(binding.args[1] for binding in self.root.bind.call_args_list if binding.args[0] == "<F9>")

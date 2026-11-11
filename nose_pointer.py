@@ -75,7 +75,9 @@ class PointerApp:
         self.language = getattr(args, "lang", "en")
         self.static_labels = []
         self.messages = {}
-        self.button_labels = {"camera_button": "open_camera", "pointer_button": "enable_mouse"}
+        self.button_labels = {
+            "camera_button": "open_camera", "pointer_button": "enable_mouse", "recenter_button": "recalibrate",
+        }
         self.tracker = Tracker(settings)
         self.camera = None
         self.last_camera_index = args.camera
@@ -151,8 +153,16 @@ class PointerApp:
 
         self.mode = tk.StringVar(value="")
         self.set_message("mode", "mode_camera_off")
-        tk.Label(frame, textvariable=self.mode, font=("Segoe UI", 11, "bold"),
-                 bg=BACKGROUND, fg=ACCENT, anchor="w", justify="left", wraplength=430).pack(fill="x")
+        mode_header = tk.Frame(frame, bg=BACKGROUND)
+        mode_header.pack(fill="x")
+        mode_header.columnconfigure(0, weight=1)
+        mode_label = tk.Label(mode_header, textvariable=self.mode, font=("Segoe UI", 11, "bold"),
+                              bg=BACKGROUND, fg=ACCENT, anchor="w", justify="left", wraplength=430)
+        mode_label.grid(row=0, column=0, sticky="w")
+        self.recenter_button = ttk.Button(mode_header, text=self.text("recalibrate"), style="Compact.TButton",
+                                          command=self.restart_calibration, state="disabled")
+        self.recenter_button.grid(row=0, column=1, sticky="e")
+        mode_header.bind("<Configure>", lambda event: self.resize_header(event, mode_label, self.recenter_button))
         self.status = tk.StringVar(value="")
         self.set_message("status", "status_welcome")
         self.status_label = tk.Label(frame, textvariable=self.status, font=("Segoe UI", 10),
@@ -268,7 +278,7 @@ class PointerApp:
         self.pointer_button.pack(side="left")
         self.right_dwell_button = ttk.Button(dwell_actions, command=self.toggle_right_dwell)
         self.right_dwell_button.bind("<ButtonRelease-3>", self.cancel_right_dwell)
-        self.action_buttons = (self.camera_button, self.pointer_button, self.right_dwell_button)
+        self.action_buttons = (self.camera_button, self.pointer_button, self.right_dwell_button, self.recenter_button)
         for key in BUTTON_ACTION_KEYS:
             root.bind(f"<KeyPress-{key}>", self.remember_other_button_key, add="+")
             root.bind(f"<KeyRelease-{key}>", self.release_button_key, add="+")
@@ -745,6 +755,7 @@ class PointerApp:
             self.camera = Camera(index, max_sample_gap_seconds=self.settings.max_sample_gap_seconds)
             self.camera.start()
             self.camera_index_to_save = index if index != self.last_camera_index else None
+            self.configure_action_button(self.recenter_button, state="normal")
         except (OSError, RuntimeError) as error:
             self.finish_camera()
             self.status_label.configure(height=0)
@@ -754,6 +765,7 @@ class PointerApp:
     def stop_camera(self, message, **fields):
         self.camera.stop()
         self.disable_input()
+        self.configure_action_button(self.recenter_button, state="disabled")
         self.set_button("camera_button", "open_camera", state="disabled")
         self.set_message("mode", "mode_input_off")
         self.status_label.configure(height=0 if message == "camera_error_detail" else 3)
@@ -767,6 +779,7 @@ class PointerApp:
         self.disable_input()
         self.camera = None
         self.camera_index_to_save = None
+        self.configure_action_button(self.recenter_button, state="disabled")
         self.camera_picker.configure(state="normal")
         self.set_button("camera_button", "open_camera", state="normal")
         self.set_message("mode", "mode_camera_off")
@@ -811,16 +824,26 @@ class PointerApp:
     def request_recenter(self, _event=None):
         if not self.active or self.recenter_held:
             return
-        if self.mouse.emergency_requested():
+        self.recenter_held = True
+        self.restart_calibration()
+
+    def restart_calibration(self):
+        camera = self.camera
+        if camera is None or camera.stop_event.is_set() or not camera.thread.is_alive():
+            return
+        if self.active and self.mouse.emergency_requested():
             self.pause()
             return
-        self.recenter_held = True
         self.recenter()
 
     def recenter(self):
         requested_at = monotonic()
         self.reset_calibration()
         self.calibration_requested_at = requested_at
+        if not self.active:
+            self.configure_action_button(self.pointer_button, state="disabled")
+            self.position = (0.5, 0.5)
+            self.draw_pad()
         self.set_message("status", self.tracking_text_key("status_recenter"))
 
     def reset_calibration(self):

@@ -119,7 +119,7 @@ class CompactLayoutTests(unittest.TestCase):
                         app.camera_button.focus_force()
                         root.update()
                         visited = set()
-                        for _ in range(11):
+                        for _ in range(12):
                             root.focus_get().event_generate("<KeyPress-Tab>")
                             root.update()
                             focused = root.focus_get()
@@ -129,7 +129,9 @@ class CompactLayoutTests(unittest.TestCase):
                                 break
                         self.assertTrue({app.language_picker, app.sensitivity_picker, app.mode_picker,
                                          app.delay_picker, app.right_dwell_button, app.dwell_eye_picker,
-                                         app.pointer_button} <= visited)
+                                         app.pointer_button, app.recenter_button} <= visited)
+                        self.assertEqual(app.recenter_button.cget("text"), app.text("recalibrate"))
+                        self.assertFalse(app.recenter_button.instate(["disabled"]))
 
                         with patch("nose_pointer.monotonic", return_value=1.1):
                             app.pointer_button.invoke()
@@ -137,6 +139,13 @@ class CompactLayoutTests(unittest.TestCase):
                         self.assertTrue(app.active)
                         self.assert_widget_fits(app.pointer_button, root)
                         self.assert_widget_fits(app.hotkey_label, root)
+                        app.recenter_button.focus_force()
+                        root.update()
+                        self.assert_widget_fits(app.recenter_button, app.workspace)
+                        with patch("nose_pointer.monotonic", return_value=1.2):
+                            app.recenter_button.invoke()
+                        self.assertTrue(app.active)
+                        self.assertEqual(app.calibration_requested_at, 1.2)
 
                         app.pause_for_safety("safety_mouse_button")
                         root.update()
@@ -151,6 +160,7 @@ class CompactLayoutTests(unittest.TestCase):
                         root.update()
                         self.assert_widget_fits(app.camera_button, root)
                         self.assertTrue(app.camera_button.instate(["disabled"]))
+                        self.assertTrue(app.recenter_button.instate(["disabled"]))
                         mouse.move.assert_not_called()
                         mouse.click.assert_not_called()
 

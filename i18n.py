@@ -31,6 +31,7 @@ MESSAGES = {
     "enable_mouse": ("Enable mouse", "Включить мышь"),
     "enable_mouse_short": ("Mouse on", "Вкл. мышь"),
     "pause": ("Pause", "Пауза"),
+    "recalibrate": ("Recalibrate", "Калибровать заново"),
     "right_click": ("Right click", "Правый клик"),
     "cancel": ("Cancel", "Отменить"),
     "hotkeys": ("F8  ·  Pause     F9  ·  Recalibrate", "F8  ·  Пауза     F9  ·  Калибровка"),

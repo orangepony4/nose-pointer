@@ -35,7 +35,7 @@ If the default camera fails to open or points at the wrong device, turn it off i
 
 When you open the camera, the app tries Media Foundation for the same camera number if DirectShow cannot open or configure the device or deliver its first frame. Once video arrives, the app keeps using that backend for that capture session.
 
-On shorter windows, scroll the practice area and settings above the camera and mouse buttons. With large text, button captions may be shorter and the privacy note can move into the scrollable area. Use **Page Up** or **Page Down** to scroll with the keyboard. Pressing **Tab** brings each focused control into view. Press **Enter** or **Space** on the focused camera, mouse control or right-click button with **Shift**, **Ctrl**, and **Alt** released. The action runs once when you release the key while the same button has focus. If you switch windows with the key held, release it and press it again. If control stops for safety or an error occurs, a brief reason stays near the buttons while you scroll.
+On shorter windows, scroll the practice area and settings above the camera and mouse buttons. With large text, button captions may be shorter and the privacy note can move into the scrollable area. Use **Page Up** or **Page Down** to scroll with the keyboard. Pressing **Tab** brings each focused control into view. Press **Enter** or **Space** on the focused camera, mouse control, recalibration or right-click button with **Shift**, **Ctrl**, and **Alt** released. The action runs once when you release the key while the same button has focus. If you switch windows with the key held, release it and press it again. If control stops for safety or an error occurs, a brief reason stays near the buttons while you scroll.
 
 ### Choose how to click
 
@@ -59,7 +59,9 @@ Use `left`, `right` or `both`. Add `--dwell-ms 1600` to override your saved dela
 
 ### Recalibrate and recover
 
-With system control enabled, tap **F9** in Nose Pointer to recalibrate from the current cursor position. In another window, hold **F9** briefly. In practice mode, use **Sensitivity** (Чувствительность) to tune the amount of head movement. **High** (Высокая) needs less movement, and **Low** (Низкая) gives finer control. Changing sensitivity starts a fresh calibration.
+While the camera is on, select **Recalibrate** above the practice pad. In practice mode, the dot returns to the center. With system control enabled, you can select the button by winking or dwelling and resume from the current Windows cursor position. You can also tap **F9** in Nose Pointer or hold it briefly in another window.
+
+In practice mode, use **Sensitivity** (Чувствительность) to tune the amount of head movement. **High** (Высокая) needs less movement, and **Low** (Низкая) gives finer control. Changing sensitivity starts a fresh calibration.
 
 When you enable mouse control or request recalibration, the app uses camera frames captured from that moment onward. If you adjust your pose during desktop calibration, keep your final pose briefly as calibration finishes. The current cursor position is the starting point for your next movement.
 
@@ -141,7 +143,7 @@ uv run --locked nose_pointer.py
 
 При открытии камеры приложение пробует Media Foundation для того же номера, если DirectShow не может открыть или настроить устройство либо получить первый кадр. После получения видео приложение продолжает использовать выбранный способ захвата до выключения камеры.
 
-В невысоком окне прокручивайте тестовое поле и настройки над кнопками камеры и мыши. При крупном тексте подписи кнопок могут сокращаться, а пояснение об обработке кадров может переместиться в прокручиваемую область. Для прокрутки с клавиатуры нажмите **Page Up** или **Page Down**. При нажатии **Tab** элемент в фокусе появится в видимой части окна. Нажмите **Enter** или **Пробел** без **Shift**, **Ctrl** и **Alt**, когда в фокусе кнопка камеры, управления мышью или правого клика. Действие выполняется один раз при отпускании клавиши, пока та же кнопка остаётся в фокусе. Если вы переключили окно с зажатой клавишей, отпустите её и нажмите снова. Если управление остановилось для безопасности или произошла ошибка, краткая причина остаётся рядом с кнопками при прокрутке.
+В невысоком окне прокручивайте тестовое поле и настройки над кнопками камеры и мыши. При крупном тексте подписи кнопок могут сокращаться, а пояснение об обработке кадров может переместиться в прокручиваемую область. Для прокрутки с клавиатуры нажмите **Page Up** или **Page Down**. При нажатии **Tab** элемент в фокусе появится в видимой части окна. Нажмите **Enter** или **Пробел** без **Shift**, **Ctrl** и **Alt**, когда в фокусе кнопка камеры, управления мышью, повторной калибровки или правого клика. Действие выполняется один раз при отпускании клавиши, пока та же кнопка остаётся в фокусе. Если вы переключили окно с зажатой клавишей, отпустите её и нажмите снова. Если управление остановилось для безопасности или произошла ошибка, краткая причина остаётся рядом с кнопками при прокрутке.
 
 ### Режимы клика
 
@@ -165,7 +167,9 @@ uv run --locked nose_pointer.py
 
 ### Калибровка и восстановление управления
 
-При включённой мыши нажмите **F9** в окне Nose Pointer, чтобы заново откалибровать управление с текущей позиции указателя. В другом окне ненадолго удерживайте **F9**. В режиме пробы настройте **Чувствительность**. **Высокая** требует меньших движений головы, а **Низкая** помогает точнее наводить указатель. Смена чувствительности запускает калибровку заново.
+Пока камера включена, нажмите **Калибровать заново** над тестовым полем. В режиме пробы точка вернётся в центр. При включённой мыши эту кнопку можно нажать подмигиванием или задержкой. Управление продолжится с текущей позиции указателя Windows. Также можно нажать **F9** в окне Nose Pointer или ненадолго удержать клавишу в другом окне.
+
+В режиме пробы настройте **Чувствительность**. **Высокая** требует меньших движений головы, а **Низкая** помогает точнее наводить указатель. Смена чувствительности запускает калибровку заново.
 
 После включения управления мышью или запроса повторной калибровки приложение использует кадры, снятые с этого момента. Если сменили позу при калибровке системной мыши, ненадолго задержитесь в новой позе до её завершения. Следующее движение начнётся с текущей позиции указателя.
 
