@@ -743,6 +743,37 @@ class PreviewTests(unittest.TestCase):
         self.mouse.end_control.assert_called_once_with()
         self.assert_no_system_input()
 
+    def test_stop_button_does_not_reopen_a_camera_that_has_just_exited(self):
+        self.arm_system_pointer()
+        source = self.attach_camera_feed()
+        source.thread.is_alive.return_value = False
+        source.error = camera.CameraFailure("camera_error_detail", "device disconnected")
+        self.assertEqual(self.app.button_labels["camera_button"], "stop_camera")
+
+        with patch("nose_pointer.Camera") as factory:
+            self.app.toggle_camera()
+            factory.assert_not_called()
+
+        self.assertIs(self.app.camera, source)
+        self.assertTrue(source.stop_event.is_set())
+        self.assertEqual(self.app.status.get(), self.app.text("status_stopping"))
+        self.app.poll()
+        self.assertIsNone(self.app.camera)
+        self.assertFalse(self.app.active)
+        self.assertEqual(self.app.status.get(), self.app.text("status_camera_off"))
+        self.assertEqual(self.app.button_labels["camera_button"], "open_camera")
+        self.mouse.end_control.assert_called_once_with()
+        self.assert_no_system_input()
+
+        next_source = camera.Camera(0)
+        next_source.thread = Mock()
+        with patch("nose_pointer.Camera", return_value=next_source) as factory:
+            self.app.toggle_camera()
+        factory.assert_called_once_with(0, max_sample_gap_seconds=self.app.settings.max_sample_gap_seconds)
+        next_source.thread.start.assert_called_once_with()
+        self.assertIs(self.app.camera, next_source)
+        self.assertFalse(self.app.active)
+
     def test_camera_number_can_change_after_a_failed_open_or_a_completed_stop(self):
         self.app.camera_picker.configure.assert_called_with(state="disabled")
         self.camera.snapshot.return_value = (None, camera.CameraFailure("camera_unavailable"))

@@ -695,7 +695,8 @@ class PointerApp:
         self.pad.create_oval(px - 7, py - 7, px + 7, py + 7, fill=ACCENT, outline="")
 
     def toggle_camera(self):
-        if self.camera and self.camera.thread.is_alive():
+        # The button remains a stop action until the UI has finalized the camera.
+        if self.camera is not None:
             self.stop_camera("status_stopping")
             return
         index = parse_camera_index(self.camera_index.get())
