@@ -137,6 +137,37 @@ class DwellEyeWidgetTests(unittest.TestCase):
         mouse.move.assert_not_called()
         mouse.click.assert_not_called()
 
+    def test_wink_hold_picker_keeps_custom_value_and_locks_during_system_control(self):
+        app, mouse = self.open_app(Settings(calibration_seconds=0, wink_min_seconds=0.35))
+        picker = app.wink_hold_picker
+        self.assertEqual(picker.cget("values"), ("220", "300", "350", "400", "500", "600"))
+        self.assertEqual(picker.get(), "350")
+        self.assertEqual(app.wink_hold_row.winfo_manager(), "pack")
+        self.choose(app.language_picker, 1)
+        self.assertEqual(picker.get(), "350")
+        self.choose(picker, 3)
+        self.assertEqual(app.settings.wink_min_seconds, 0.4)
+        self.save_preference.assert_called_once_with("wink-hold-ms", 400)
+
+        app.update_tracking(0.1, FaceSample(0.5, 0.5, 0.1, 0.1))
+        self.clock.return_value = 0.1
+        app.toggle_pointer()
+        self.assertTrue(app.active)
+        self.assertTrue(picker.instate(["disabled"]))
+        self.choose(picker, 1)
+        self.assertEqual(picker.get(), "400")
+        self.assertEqual(app.settings.wink_min_seconds, 0.4)
+        app.pause()
+        self.assertTrue(picker.instate(["readonly", "!disabled"]))
+        for mode in (1, 2):
+            self.choose(app.mode_picker, mode)
+            self.assertEqual(app.wink_hold_row.winfo_manager(), "")
+        self.choose(app.mode_picker, 0)
+        self.assertEqual(app.wink_hold_row.winfo_manager(), "pack")
+        self.assertEqual(picker.get(), "400")
+        mouse.move.assert_not_called()
+        mouse.click.assert_not_called()
+
     def test_eye_picker_uses_spare_mode_row_space_and_stacks_at_narrow_widths(self):
         app, mouse = self.open_app(Settings(dwell_seconds=1.2))
         for language in (0, 1):

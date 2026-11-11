@@ -30,6 +30,7 @@ CLICK_MODES = (WINK_MODE, DWELL_MODE, MOTION_MODE)
 DWELL_EYE_CHOICES = {"both": None, "left": "left", "right": "right"}
 DWELL_EYES = {f"eye_{choice}": eye for choice, eye in DWELL_EYE_CHOICES.items()}
 WINK_LEFT_EYES = {"eye_left": "left", "eye_right": "right"}
+WINK_HOLD_PRESETS_MS = (220, 300, 400, 500, 600)
 CHOICE_GAP = 9
 SENSITIVITY_PRESETS = {
     "sensitivity_low": (0.18, 0.15, Settings.dead_zone),
@@ -243,6 +244,17 @@ class PointerApp:
         self.layout_choice(self.wink_eye_row, self.wink_eye_label, self.wink_eye_picker)
         self.wink_eye_picker.bind("<<ComboboxSelected>>", self.change_wink_eye)
         self.click_controls.bind("<Configure>", lambda event: self.layout_click_eye(event.width))
+        self.wink_hold_row = tk.Frame(settings_controls, bg=BACKGROUND)
+        wink_hold_label = self.make_label(self.wink_hold_row, "wink_hold", font=("Segoe UI", 10), fg=INK)
+        current_wink_ms = round(settings.wink_min_seconds * 1000)
+        self.wink_holds = tuple(str(value) for value in sorted({*WINK_HOLD_PRESETS_MS, current_wink_ms}))
+        self.wink_hold = tk.StringVar(value=str(current_wink_ms))
+        self.wink_hold_picker = ttk.Combobox(
+            self.wink_hold_row, textvariable=self.wink_hold, values=self.wink_holds, width=6,
+            state="disabled" if args.no_clicks else "readonly",
+        )
+        self.layout_choice(self.wink_hold_row, wink_hold_label, self.wink_hold_picker)
+        self.wink_hold_picker.bind("<<ComboboxSelected>>", self.change_wink_hold)
         current_delay = round(settings.dwell_seconds * 1000) if settings.dwell_seconds is not None else initial_dwell_ms
         self.dwell_presets = tuple(sorted({*DWELL_PRESETS_MS, current_delay}))
         self.dwell_durations = self.delay_choices()
@@ -332,7 +344,8 @@ class PointerApp:
         root.bind("<Next>", lambda _event: self.scroll_workspace(1, "pages"))
         # In a scrolling workspace, a wheel over a picker should scroll the view.
         for picker in (self.language_picker, self.sensitivity_picker, self.direction_picker, self.mode_picker,
-                       self.delay_picker, self.dwell_eye_picker, self.wink_eye_picker, self.camera_picker):
+                       self.delay_picker, self.dwell_eye_picker, self.wink_eye_picker, self.wink_hold_picker,
+                       self.camera_picker):
             picker.bind("<MouseWheel>", self.scroll_workspace_wheel, add="+")
             for key in BUTTON_ACTION_KEYS:
                 picker.bind(f"<KeyPress-{key}>", self.remember_other_button_key, add="+")
@@ -647,6 +660,10 @@ class PointerApp:
 
     def show_click_instructions(self):
         self.layout_click_eye(self.click_controls.winfo_width())
+        if self.selected_click_mode() == WINK_MODE:
+            self.wink_hold_row.pack(fill="x", pady=(8, 0))
+        else:
+            self.wink_hold_row.pack_forget()
         self.dwell_bar.configure(value=0)
         if self.settings.dwell_seconds is not None:
             self.dwell_controls.pack(fill="x", pady=(8, 0))
@@ -743,6 +760,17 @@ class PointerApp:
         self.restart_calibration()
         self.show_click_instructions()
         save_preference("wink-left-eye", eye)
+
+    def change_wink_hold(self, _event=None):
+        hold = self.wink_hold.get()
+        if self.active or self.selected_click_mode() != WINK_MODE or hold not in self.wink_holds:
+            self.wink_hold.set(str(round(self.settings.wink_min_seconds * 1000)))
+            return
+        hold_ms = int(hold)
+        if hold_ms / 1000 == self.settings.wink_min_seconds:
+            return
+        self.apply_tracking_settings(replace(self.settings, wink_min_seconds=hold_ms / 1000), require_fresh_frames=True)
+        save_preference("wink-hold-ms", hold_ms)
 
     def change_sensitivity(self, _event=None):
         if self.active:
@@ -879,6 +907,7 @@ class PointerApp:
             self.delay_picker.configure(state="disabled")
             self.dwell_eye_picker.configure(state="disabled")
             self.wink_eye_picker.configure(state="disabled")
+            self.wink_hold_picker.configure(state="disabled")
             self.set_message("mode", "mode_active")
             self.set_button("pointer_button", "pause")
             self.recenter()
@@ -945,6 +974,7 @@ class PointerApp:
         self.delay_picker.configure(state="readonly")
         self.dwell_eye_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
         self.wink_eye_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
+        self.wink_hold_picker.configure(state="disabled" if self.args.no_clicks else "readonly")
         self.set_button("pointer_button", "enable_mouse", state="disabled")
 
     def reset_to_preview(self, message):
@@ -1153,10 +1183,15 @@ def load_tracking_settings(args):
             dwell_ms = DEFAULT_DWELL_MS
 
     dwell_eye = DWELL_EYE_CHOICES.get(args.dwell_eye or load_text_preference("dwell-eye"))
+    wink_ms = args.wink_ms
+    if wink_ms is None:
+        saved_wink = load_text_preference("wink-hold-ms")
+        saved_ms = int(saved_wink) if saved_wink.isdecimal() else 0
+        wink_ms = saved_ms if 0 < saved_ms <= Settings.wink_max_seconds * 1000 else round(Settings.wink_min_seconds * 1000)
     saved_direction = load_text_preference("horizontal-direction")
     mirror = not args.no_mirror and HORIZONTAL_DIRECTIONS.get(saved_direction, Settings.mirror)
     settings = Settings(mirror=mirror, range_x=range_x, range_y=range_y,
-                        dead_zone=dead_zone, wink_min_seconds=args.wink_ms / 1000,
+                        dead_zone=dead_zone, wink_min_seconds=wink_ms / 1000,
                         dwell_seconds=dwell_ms / 1000 if mode == DWELL_MODE else None,
                         motion_only=mode == MOTION_MODE, dwell_eye=dwell_eye)
     return settings, dwell_ms
@@ -1179,7 +1214,7 @@ def main(argv=None):
     parser.add_argument("--camera", type=int, help=text("cli_camera"))
     parser.add_argument("--range-x", type=float, help=text("cli_range_x"))
     parser.add_argument("--range-y", type=float, help=text("cli_range_y"))
-    parser.add_argument("--wink-ms", type=int, default=220, help=text("cli_wink"))
+    parser.add_argument("--wink-ms", type=int, help=text("cli_wink"))
     parser.add_argument("--no-mirror", action="store_true", help=text("cli_no_mirror"))
     parser.add_argument("--swap-buttons", action="store_true", help=text("cli_swap"))
     clicks = parser.add_mutually_exclusive_group()

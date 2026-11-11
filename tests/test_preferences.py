@@ -136,6 +136,20 @@ class PreferencesTests(unittest.TestCase):
         self.assertFalse(self.launched_swap_buttons)
         self.assertEqual(path.read_bytes(), b"both\n")
 
+    def test_saved_wink_hold_and_transient_custom_cli_override(self):
+        path = self.directory / "wink-hold-ms.txt"
+        save_preference("wink-hold-ms", 400)
+        self.assertEqual(self.launch()[0].wink_min_seconds, 0.4)
+        self.assertEqual(self.launch("--wink-ms", "350")[0].wink_min_seconds, 0.35)
+        self.assertEqual(self.launch()[0].wink_min_seconds, 0.4)
+        self.assertEqual(path.read_bytes(), b"400\n")
+
+        for invalid in (b"0", b"851", b"bad", b"x" * 40):
+            with self.subTest(invalid=invalid):
+                path.write_bytes(invalid)
+                self.assertEqual(self.launch()[0].wink_min_seconds, Settings.wink_min_seconds)
+                self.assertEqual(path.read_bytes(), invalid)
+
     def test_one_eye_dwell_conflicts_with_motion_only(self):
         with redirect_stderr(StringIO()) as stderr, self.assertRaises(SystemExit) as error:
             self.launch("--lang", "ru", "--dwell-eye", "left", "--no-clicks")

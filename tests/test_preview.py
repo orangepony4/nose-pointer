@@ -69,7 +69,7 @@ class PreviewTests(unittest.TestCase):
         self.buttons = [Mock() for _ in range(4)]
         frame = Mock(winfo_width=Mock(return_value=500))
         label = Mock(winfo_reqwidth=Mock(return_value=80))
-        combos = [Mock(winfo_reqwidth=Mock(return_value=100)) for _ in range(7)]
+        combos = [Mock(winfo_reqwidth=Mock(return_value=100)) for _ in range(8)]
         with (
             patch.multiple("nose_pointer.tk", Frame=Mock(return_value=frame), Label=Mock(return_value=label),
                            Canvas=Mock(side_effect=[workspace, pad]), StringVar=StringValue),
@@ -620,6 +620,32 @@ class PreviewTests(unittest.TestCase):
         self.mouse.click.assert_called_once_with(
             "left", expected_position=self.app.last_applied_position, valid_until=ANY,
         )
+
+    def test_wink_hold_resets_pending_gesture_and_applies_the_new_minimum(self):
+        self.calibrate(0)
+        self.feed(0.50, LEFT_WINK)
+        self.feed(0.62, LEFT_WINK)
+        self.clock.return_value = 0.68
+        self.app.wink_hold.set("400")
+        self.app.change_wink_hold()
+        self.save_preference.assert_called_once_with("wink-hold-ms", 400)
+        self.assertEqual(self.app.calibration_requested_at, 0.68)
+        self.feed(0.67)
+        self.feed(0.77)
+        instruction = self.app.text("instruction_wink")
+        self.assertEqual(self.app.last_gesture.get(), instruction)
+
+        self.calibrate(0.80)
+        for now in (1.20, 1.32):
+            self.feed(now, LEFT_WINK)
+        self.feed(1.47)
+        self.assertEqual(self.app.last_gesture.get(), instruction)
+        self.feed(1.64)
+        for now in (1.75, 1.90, 2.05):
+            self.feed(now, LEFT_WINK)
+        self.feed(2.17)
+        self.assertEqual(self.app.last_gesture.get(), self.app.text("gesture_preview_left"))
+        self.assert_no_system_input()
 
     def test_activation_uses_the_cursor_position_at_the_end_of_calibration(self):
         self.calibrate(0)
