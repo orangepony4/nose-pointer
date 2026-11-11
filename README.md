@@ -26,7 +26,7 @@ Nose Pointer opens in English on first launch. Use **Language** to switch to **�
 
 The app remembers the sensitivity preset, click mode and dwell delay you choose. Each launch still starts with the camera and system control off. The command-line options `--range-x`, `--range-y`, `--no-clicks` and `--dwell-ms` override saved choices for that launch.
 
-1. Select **Open camera** (Открыть камеру). The green dot is a practice pointer. Your Windows cursor stays under your usual control.
+1. Select **Open camera** (Открыть камеру). The violet dot is a practice pointer. Your Windows cursor stays under your usual control.
 2. Look straight ahead while the app calibrates and follow the eye instructions in the status. Try moving the dot. If you use a click mode, try it in the practice area and look for the recognized click below it.
 3. Choose your click mode and sensitivity while still in practice mode. Select **Enable mouse** (Включить мышь) when ready. Calibration uses the current cursor position as its starting point, and the pointer can reach across multiple monitors.
 4. Tap **F8** in Nose Pointer to pause. In another window, hold **F8** briefly. The app checks **F8** again just before moving or clicking. You can also press **Esc** in Nose Pointer, select **Pause** (Пауза), or close the app. **Turn off camera** (Выключить камеру) stops capture.
@@ -35,7 +35,7 @@ If the default camera fails to open or points at the wrong device, turn it off i
 
 When you open the camera, the app tries Media Foundation for the same camera number if DirectShow cannot open or configure the device or deliver its first frame. Once video arrives, the app keeps using that backend for that capture session.
 
-On shorter windows, scroll the practice area and settings above the camera and mouse buttons. With large text, button captions may be shorter and the privacy note can move into the scrollable area. Use **Page Up** or **Page Down** to scroll with the keyboard. Pressing **Tab** brings each focused control into view. Use **Enter** or **Space** on the focused camera, mouse control or right-click button. The action runs once when you release the key while the same button has focus. If you switch windows with the key held, release it and press it again. If control stops for safety or an error occurs, a brief reason stays near the buttons while you scroll.
+On shorter windows, scroll the practice area and settings above the camera and mouse buttons. With large text, button captions may be shorter and the privacy note can move into the scrollable area. Use **Page Up** or **Page Down** to scroll with the keyboard. Pressing **Tab** brings each focused control into view. Press **Enter** or **Space** on the focused camera, mouse control or right-click button with **Shift**, **Ctrl**, and **Alt** released. The action runs once when you release the key while the same button has focus. If you switch windows with the key held, release it and press it again. If control stops for safety or an error occurs, a brief reason stays near the buttons while you scroll.
 
 ### Choose how to click
 
@@ -132,7 +132,7 @@ uv run --locked nose_pointer.py
 
 Приложение запоминает выбранный профиль чувствительности, режим клика и задержку. При каждом запуске камера и системное управление выключены. Параметры командной строки `--range-x`, `--range-y`, `--no-clicks` и `--dwell-ms` имеют приоритет над сохранёнными настройками на время текущего запуска.
 
-1. Нажмите **Открыть камеру**. В режиме пробы зелёная точка движется в окне, а курсор Windows остаётся под вашим обычным управлением.
+1. Нажмите **Открыть камеру**. В режиме пробы фиолетовая точка движется в окне, а курсор Windows остаётся под вашим обычным управлением.
 2. Смотрите прямо во время калибровки и следуйте подсказкам в строке состояния. Попробуйте подвигать точку. Если вы выбрали режим клика, попробуйте его в тестовом поле. Под полем появится распознанный клик.
 3. Подберите режим клика и чувствительность в режиме пробы. Нажмите **Включить мышь**, когда будете готовы. Текущая позиция указателя станет опорной точкой. Управление охватывает и дополнительные мониторы.
 4. Для паузы нажмите **F8** в окне Nose Pointer. В другом окне ненадолго удерживайте **F8**. Приложение проверяет **F8** ещё раз перед движением или кликом. Также можно нажать **Esc** в приложении, выбрать **Паузу** или закрыть окно. Кнопка **Выключить камеру** останавливает захват.
@@ -141,7 +141,7 @@ uv run --locked nose_pointer.py
 
 При открытии камеры приложение пробует Media Foundation для того же номера, если DirectShow не может открыть или настроить устройство либо получить первый кадр. После получения видео приложение продолжает использовать выбранный способ захвата до выключения камеры.
 
-В невысоком окне прокручивайте тестовое поле и настройки над кнопками камеры и мыши. При крупном тексте подписи кнопок могут сокращаться, а пояснение об обработке кадров может переместиться в прокручиваемую область. Для прокрутки с клавиатуры нажмите **Page Up** или **Page Down**. При нажатии **Tab** элемент в фокусе появится в видимой части окна. Нажмите **Enter** или **Пробел**, когда в фокусе кнопка камеры, управления мышью или правого клика. Действие выполняется один раз при отпускании клавиши, пока та же кнопка остаётся в фокусе. Если вы переключили окно с зажатой клавишей, отпустите её и нажмите снова. Если управление остановилось для безопасности или произошла ошибка, краткая причина остаётся рядом с кнопками при прокрутке.
+В невысоком окне прокручивайте тестовое поле и настройки над кнопками камеры и мыши. При крупном тексте подписи кнопок могут сокращаться, а пояснение об обработке кадров может переместиться в прокручиваемую область. Для прокрутки с клавиатуры нажмите **Page Up** или **Page Down**. При нажатии **Tab** элемент в фокусе появится в видимой части окна. Нажмите **Enter** или **Пробел** без **Shift**, **Ctrl** и **Alt**, когда в фокусе кнопка камеры, управления мышью или правого клика. Действие выполняется один раз при отпускании клавиши, пока та же кнопка остаётся в фокусе. Если вы переключили окно с зажатой клавишей, отпустите её и нажмите снова. Если управление остановилось для безопасности или произошла ошибка, краткая причина остаётся рядом с кнопками при прокрутке.
 
 ### Режимы клика
 

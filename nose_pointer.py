@@ -18,10 +18,10 @@ from windows_mouse import (
 
 BACKGROUND = "#f7f5ef"
 PAPER = "#fffdf7"
-INK = "#23271f"
-MUTED = "#565c50"
-EDGE = "#dedbd1"
-ACCENT = "#315538"
+INK = "#292433"
+MUTED = "#5b5168"
+EDGE = "#d8cfe1"
+ACCENT = "#4e367c"
 ALERT = "#81261b"
 WINK_MODE = "wink"
 DWELL_MODE = "dwell"
@@ -48,6 +48,8 @@ CAMERA_BRIEF_MESSAGES = {
 COMPACT_ACTION_LABELS = {"open_camera": "open_camera_short", "stop_camera": "stop_camera_short",
                          "enable_mouse": "enable_mouse_short"}
 BUTTON_ACTION_KEYS = ("Return", "KP_Enter", "space")
+# Tk on Windows reports Shift, Control and Alt in these key-event state bits.
+BUTTON_ACTION_MODIFIERS = 0x0001 | 0x0004 | 0x20000
 
 def dwell_label(milliseconds, language):
     value = f"{milliseconds / 1000:g}"
@@ -291,7 +293,9 @@ class PointerApp:
         root.after(16, self.poll)
 
     def press_button_key(self, event):
-        if event.keysym not in self.button_key_presses:
+        if event.state & BUTTON_ACTION_MODIFIERS:
+            self.button_key_presses[event.keysym] = None
+        elif event.keysym not in self.button_key_presses:
             button = event.widget
             if button is self.root.focus_get() and button.instate(["!disabled"]):
                 self.button_key_presses[event.keysym] = button, button.cget("text")
@@ -312,7 +316,7 @@ class PointerApp:
 
     def release_button_key(self, event):
         press = self.button_key_presses.pop(event.keysym, None)
-        if press is not None:
+        if press is not None and not (event.state & BUTTON_ACTION_MODIFIERS):
             button, label = press
             if (button is event.widget and button is self.root.focus_get()
                     and button.instate(["!disabled"]) and button.cget("text") == label):

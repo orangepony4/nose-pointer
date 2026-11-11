@@ -849,7 +849,7 @@ class PreviewTests(unittest.TestCase):
             with self.subTest(key=key):
                 press = bindings[f"<KeyPress-{key}>"]
                 release = bindings[f"<KeyRelease-{key}>"]
-                event = SimpleNamespace(widget=button, keysym=key)
+                event = SimpleNamespace(widget=button, keysym=key, state=0)
                 press(event)
                 press(event)
                 button.invoke.assert_not_called()
@@ -883,6 +883,40 @@ class PreviewTests(unittest.TestCase):
                 release(event)
                 button.invoke.assert_not_called()
 
+    def test_modified_keyboard_actions_cannot_activate_a_button(self):
+        button = self.app.camera_button
+        self.root.focus_get.return_value = button
+        button.instate.return_value = True
+        button.cget.return_value = "Open camera"
+        bindings = dict(call.args for call in button.bind.call_args_list)
+        for key, modifier in (("Return", 0x0001), ("KP_Enter", 0x0004), ("space", 0x20000)):
+            with self.subTest(key=key, modifier=modifier):
+                button.invoke.reset_mock()
+                press = bindings[f"<KeyPress-{key}>"]
+                release = bindings[f"<KeyRelease-{key}>"]
+                modified = SimpleNamespace(widget=button, keysym=key, state=modifier)
+                # Caps Lock, Num Lock and the extended-key bit can accompany a plain press.
+                plain = SimpleNamespace(widget=button, keysym=key, state=0x4000A)
+
+                press(modified)
+                press(plain)
+                release(plain)
+                button.invoke.assert_not_called()
+
+                press(plain)
+                release(modified)
+                button.invoke.assert_not_called()
+
+                press(plain)
+                press(modified)
+                press(plain)
+                release(plain)
+                button.invoke.assert_not_called()
+
+                press(plain)
+                release(plain)
+                button.invoke.assert_called_once_with()
+
     def test_keyboard_action_focus_change_disarms_the_original_press_and_any_repeat(self):
         camera_button, pointer_button = self.app.camera_button, self.app.pointer_button
         self.root.tk.call.return_value = "."
@@ -892,11 +926,11 @@ class PreviewTests(unittest.TestCase):
         for key in ("Return", "space"):
             with self.subTest(key=key):
                 self.root.focus_get.return_value = camera_button
-                self.app.press_button_key(SimpleNamespace(widget=camera_button, keysym=key))
+                self.app.press_button_key(SimpleNamespace(widget=camera_button, keysym=key, state=0))
                 self.app.cancel_button_key(SimpleNamespace(widget=camera_button))
                 self.root.after_idle.call_args.args[0]()
                 self.root.focus_get.return_value = pointer_button
-                event = SimpleNamespace(widget=pointer_button, keysym=key)
+                event = SimpleNamespace(widget=pointer_button, keysym=key, state=0)
                 for binding in self.root.bind.call_args_list:
                     if binding.args[0] == "<FocusIn>":
                         binding.args[1](event)
@@ -922,7 +956,7 @@ class PreviewTests(unittest.TestCase):
                 with self.subTest(key=key, still_held=still_held):
                     button.invoke.reset_mock()
                     self.mouse.action_key_held.reset_mock()
-                    event = SimpleNamespace(widget=button, keysym=key)
+                    event = SimpleNamespace(widget=button, keysym=key, state=0)
                     self.root.focus_get.return_value = button
                     self.app.press_button_key(event)
                     self.root.focus_get.return_value = None
@@ -952,9 +986,10 @@ class PreviewTests(unittest.TestCase):
         bindings = {call.args[0]: call.args[1] for call in self.app.camera_picker.bind.call_args_list}
         for key in ("Return", "space"):
             with self.subTest(key=key):
-                event = SimpleNamespace(widget=button, keysym=key)
+                event = SimpleNamespace(widget=button, keysym=key, state=0)
                 picker_press = bindings[f"<KeyPress-{key}>"]
-                self.assertIsNone(picker_press(SimpleNamespace(widget=self.app.camera_picker, keysym=key)))
+                picker_event = SimpleNamespace(widget=self.app.camera_picker, keysym=key, state=0)
+                self.assertIsNone(picker_press(picker_event))
                 self.app.press_button_key(event)
                 self.app.release_button_key(event)
                 button.invoke.assert_not_called()
@@ -970,7 +1005,7 @@ class PreviewTests(unittest.TestCase):
         button.instate.return_value = True
         button.cget.return_value = "Pause"
         self.root.focus_get.return_value = button
-        event = SimpleNamespace(widget=button, keysym="space")
+        event = SimpleNamespace(widget=button, keysym="space", state=0)
         bindings = dict(call.args for call in button.bind.call_args_list)
         press = bindings["<KeyPress-space>"]
         release = bindings["<KeyRelease-space>"]
@@ -1003,8 +1038,8 @@ class PreviewTests(unittest.TestCase):
         button.instate.return_value = True
         button.cget.return_value = "Pause"
         self.root.focus_get.return_value = button
-        enter = SimpleNamespace(widget=button, keysym="Return")
-        space = SimpleNamespace(widget=button, keysym="space")
+        enter = SimpleNamespace(widget=button, keysym="Return", state=0)
+        space = SimpleNamespace(widget=button, keysym="space", state=0)
 
         self.app.press_button_key(enter)
         self.app.press_button_key(space)
