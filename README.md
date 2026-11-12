@@ -58,6 +58,8 @@ In **Wink** practice mode, use **Eye for left click** to choose which of your ey
 
 Use **Wink hold (ms)** to set the minimum duration for a click. The default is 220 ms. If short closures register as clicks, choose a longer hold and test it in the practice area. Changing the duration cancels any pending wink and starts a new calibration.
 
+During practice, **Reopen your eye for a practice click** appears when your wink has reached the selected hold. Reopen the eye promptly and check the recognized click below the practice pad.
+
 #### Dwell with one eye open
 
 In practice mode, choose **Dwell** under **Click mode**. Use **Eye for dwell** to select **Left eye**, **Right eye**, or **Both eyes**. Left and right mean your own eyes. Keep the selected eye open during calibration and while moving the pointer. Closing it resets the click timer. Changing the eye choice cancels pending clicks and starts a fresh calibration. The app saves your choice for the next time you use Dwell.
@@ -180,6 +182,8 @@ uv run --locked nose_pointer.py
 В режиме пробы выберите **Подмигивание**, затем укажите **Глаз для левого клика**. Другой глаз будет выполнять правый клик. По умолчанию левый клик выполняется левым глазом. При смене настройки с включённой камерой текущий жест отменяется и начинается новая калибровка.
 
 Поле **Удержание, мс** задаёт минимальную длительность подмигивания для клика. По умолчанию это 220 мс. Если короткие подмигивания вызывают клик, выберите более длительное удержание и проверьте его в режиме пробы. При смене длительности текущий жест отменяется и начинается новая калибровка.
+
+Когда подмигивание в режиме пробы достигает выбранной длительности, появляется подсказка **Откройте глаз для пробного клика**. Сразу откройте глаз и проверьте распознанный клик под тестовым полем.
 
 #### Задержка с одним открытым глазом
 

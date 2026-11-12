@@ -14,13 +14,22 @@ class CompactLayoutTests(unittest.TestCase):
     def setUp(self):
         self.enterContext(patch("nose_pointer.save_language"))
         self.enterContext(patch("nose_pointer.save_preference"))
+        self.window = None
+        self.addCleanup(self.close_window)
+
+    def close_window(self):
+        if self.window is not None:
+            self.window.destroy()
+            self.window = None
 
     def open_window(self, dpi, screen, language):
+        # Keep one Tk interpreter alive so new StringVars use this window's root.
+        self.close_window()
         try:
             root = tk.Tk()
         except tk.TclError as error:
             self.skipTest(f"No Tk display: {error}")
-        self.addCleanup(root.destroy)
+        self.window = root
         root.withdraw()
         root.attributes("-alpha", 0.0)
         root.attributes("-toolwindow", True)
@@ -36,6 +45,8 @@ class CompactLayoutTests(unittest.TestCase):
             root.geometry(f"{width}x{height}+0+0")
             root.deiconify()
             root.update()
+        # Check the variable in the widget's Tcl interpreter as well as Python.
+        self.assertEqual(root.getvar(str(app.status_label.cget("textvariable"))), app.text("status_welcome"))
         return app, mouse
 
     def assert_widget_fits(self, widget, container):

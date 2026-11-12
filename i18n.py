@@ -92,6 +92,7 @@ MESSAGES = {
     ),
     "hint_tracking": ("Face in view. Move your nose a little to steer.", "Лицо в кадре. Двигайте носом небольшими движениями."),
     "hint_wink": ("Wink detected. The pointer waits until you reopen your eye.", "Подмигивание. Точка ждёт, пока глаз откроется."),
+    "hint_wink_ready": ("Reopen your eye for a practice click.", "Откройте глаз для пробного клика."),
     "hint_rearming": ("Keep both eyes open to continue.", "Держите оба глаза открытыми, чтобы продолжить."),
     "hint_rearming_motion": ("Keep your face in view to continue.", "Держите лицо в кадре, чтобы продолжить."),
     "hint_rearming_left": ("Open your left eye to continue.", "Откройте левый глаз, чтобы продолжить."),

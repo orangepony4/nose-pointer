@@ -86,13 +86,14 @@ class FaceSample:
 
 @dataclass(frozen=True)
 class TrackingOutput:
-    """A missing position means hold the cursor. A click is a one-update event."""
+    """A missing position holds the cursor. A ready wink needs reopening before its one-update click."""
 
     position: tuple[float, float] | None
     click: Click | None
     state: TrackingState
     calibration_progress: float
     dwell_progress: float = 0.0
+    wink_ready: bool = False
 
     @property
     def calibrated(self) -> bool:
@@ -235,9 +236,9 @@ class Tracker:
         click, progress = self._advance_dwell(now, target, position, dwell_seconds)
         return TrackingOutput(self._position, click, "tracking", 1.0, progress)
 
-    def _hold(self, state: TrackingState, click: Click | None = None) -> TrackingOutput:
+    def _hold(self, state: TrackingState, click: Click | None = None, *, wink_ready: bool = False) -> TrackingOutput:
         progress = 1.0 if self.calibrated else 0.0
-        return TrackingOutput(None, click, state, progress)
+        return TrackingOutput(None, click, state, progress, wink_ready=wink_ready)
 
     def _calibrate(
         self, now: float, sample: FaceSample, eyes_open: bool,
@@ -286,6 +287,11 @@ class Tracker:
         other_score = sample.right_blink if side == "left" else sample.left_blink
         return other_score <= self.settings.open_threshold
 
+    def _wink_reached_minimum(self, now: float) -> bool:
+        # An uncertain reopening must not make a brief closure count as a wink.
+        closure_end = now if self._wink_reopening_at is None else self._wink_reopening_at
+        return self._wink_seen_again and closure_end >= self._wink_start + self.settings.wink_min_seconds
+
     def _continue_wink(
         self, side: Click, now: float, sample: FaceSample, eyes_open: bool
     ) -> TrackingOutput:
@@ -297,9 +303,7 @@ class Tracker:
             return self._hold("rearming")
         if eyes_open:
             click = None
-            # An uncertain reopening must not make a brief closure count as a wink.
-            closure_end = now if self._wink_reopening_at is None else self._wink_reopening_at
-            if self._wink_seen_again and closure_end >= self._wink_start + settings.wink_min_seconds:
+            if self._wink_reached_minimum(now):
                 click = side
                 self._last_click = now
             self._break_continuity()
@@ -308,18 +312,17 @@ class Tracker:
 
         # Allow one intermediate observation to be score jitter. Once partial
         # reopening is confirmed, a new closure cannot extend the old one.
-        if self._wink_reopening_confirmed:
-            return self._hold("wink")
-        wink_score = sample.left_blink if side == "left" else sample.right_blink
-        if wink_score >= settings.closed_threshold:
-            if now > self._wink_start:
-                self._wink_seen_again = True
-            self._wink_reopening_at = None
-        elif self._wink_reopening_at is None:
-            self._wink_reopening_at = now
-        elif now > self._wink_reopening_at:
-            self._wink_reopening_confirmed = True
-        return self._hold("wink")
+        if not self._wink_reopening_confirmed:
+            wink_score = sample.left_blink if side == "left" else sample.right_blink
+            if wink_score >= settings.closed_threshold:
+                if now > self._wink_start:
+                    self._wink_seen_again = True
+                self._wink_reopening_at = None
+            elif self._wink_reopening_at is None:
+                self._wink_reopening_at = now
+            elif now > self._wink_reopening_at:
+                self._wink_reopening_confirmed = True
+        return self._hold("wink", wink_ready=self._wink_reached_minimum(now))
 
     def _advance_dwell(
         self, now: float, target: tuple[float, float], position: tuple[float, float], duration: float

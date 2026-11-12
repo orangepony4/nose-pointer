@@ -109,6 +109,36 @@ class TrackingTests(unittest.TestCase):
                 for now, sample in sequence:
                     self.assertIsNone(tracker.update(now, sample).click)
 
+    def test_wink_readiness_requires_the_minimum_and_clears_when_interrupted(self):
+        closed = face(left=0.9)
+        interruptions = (
+            (0.50, face(left=0.9, right=0.9)),
+            (0.50, None),
+            (0.50, face(x=math.nan)),
+            (0.6875, closed),  # A gap longer than the maximum sample interval.
+        )
+        for now, interruption in interruptions:
+            with self.subTest(now=now, interruption=interruption):
+                tracker = self.ready_tracker(wink_min_seconds=0.25)
+                self.assertFalse(tracker.update(0.125, closed).wink_ready)
+                self.assertFalse(tracker.update(0.25, closed).wink_ready)
+                ready = tracker.update(0.375, closed)
+                self.assertTrue(ready.wink_ready)
+                self.assertIsNone(ready.click)
+                cancelled = tracker.update(now, interruption)
+                self.assertFalse(cancelled.wink_ready)
+                self.assertIsNone(cancelled.click)
+                self.assertIsNone(tracker.update(now + 0.0625, face()).click)
+
+        tracker = self.ready_tracker(wink_min_seconds=0.25, wink_max_seconds=0.625)
+        for now in (0.125, 0.25, 0.375, 0.5, 0.625, 0.75):
+            result = tracker.update(now, closed)
+            self.assertEqual(result.wink_ready, now >= 0.375)
+            self.assertIsNone(result.click)
+        expired = tracker.update(0.8125, closed)
+        self.assertFalse(expired.wink_ready)
+        self.assertIsNone(tracker.update(0.875, face()).click)
+
     def test_uncertain_reopening_does_not_extend_the_wink_duration(self):
         sequences = {
             "short closure before a slow reopening": (
@@ -147,6 +177,11 @@ class TrackingTests(unittest.TestCase):
                     self.assertTrue(all(output.click is None for output in outputs[:-1]))
                     self.assertEqual(outputs[-1].click, side if valid else None)
                     self.assertIsNone(outputs[-1].position)
+                    self.assertFalse(outputs[-1].wink_ready)
+                    if description == "short closure before a slow reopening":
+                        self.assertFalse(any(output.wink_ready for output in outputs))
+                    elif description == "reopening starts at minimum":
+                        self.assertTrue(outputs[-2].wink_ready)
 
     def test_opposite_eye_or_both_eyes_cancel_a_pending_wink(self):
         for interruption in (face(right=0.9), face(left=0.9, right=0.9), face(left=0.9, right=0.5)):

@@ -1048,7 +1048,9 @@ class PointerApp:
                 self.camera_index_to_save = None
             self.configure_action_button(self.pointer_button, state="normal" if self.can_enable else "disabled")
         hint = f"hint_{result.state}"
-        if result.state in ("calibrating", "rearming"):
+        if result.wink_ready and not self.active and not self.args.no_clicks:
+            hint = "hint_wink_ready"
+        elif result.state in ("calibrating", "rearming"):
             hint = self.tracking_text_key(hint)
         keys = (self.safety_notice, hint) if self.safety_notice else (hint,)
         fields = {}

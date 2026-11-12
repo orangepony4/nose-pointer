@@ -643,9 +643,26 @@ class PreviewTests(unittest.TestCase):
         self.feed(1.64)
         for now in (1.75, 1.90, 2.05):
             self.feed(now, LEFT_WINK)
-        self.feed(2.17)
+        self.assertEqual(self.app.messages["status"][0], ("hint_wink",))
+        self.feed(2.17, LEFT_WINK)
+        self.assertEqual(self.app.messages["status"][0], ("hint_wink_ready",))
+        self.app.language_choice.set("Русский")
+        self.app.change_language()
+        self.assertEqual(self.app.status.get(), self.app.text("hint_wink_ready"))
+        self.feed(2.24)
         self.assertEqual(self.app.last_gesture.get(), self.app.text("gesture_preview_left"))
+        self.assertEqual(self.app.messages["status"][0], ("hint_rearming",))
         self.assert_no_system_input()
+
+    def test_system_control_does_not_show_the_practice_wink_cue(self):
+        self.arm_system_pointer()
+        for now in (0.80, 0.92, 1.04):
+            self.feed(now, LEFT_WINK)
+        self.assertEqual(self.app.messages["status"][0], ("hint_wink",))
+        self.mouse.click.assert_not_called()
+        self.feed(1.11)
+        self.mouse.click.assert_called_once_with("left", expected_position=self.app.last_applied_position,
+                                                valid_until=ANY)
 
     def test_activation_uses_the_cursor_position_at_the_end_of_calibration(self):
         self.calibrate(0)
