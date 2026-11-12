@@ -113,6 +113,54 @@ class CompactLayoutTests(unittest.TestCase):
                 self.assertFalse(app.dwell_eye_picker.winfo_ismapped())
                 self.assertEqual(mouse.mock_calls, [])
 
+    def assert_wrapped_instructions_readable(self, language):
+        app, mouse = self.open_window(384, (640, 480), language)
+        messages = (
+            (app.status_label, "status", ("hint_calibrating_right",), {"progress": 20}),
+            (app.status_label, "status", ("safety_control_busy", "hint_calibrating_right"), {"progress": 20}),
+            (app.gesture_label, "last_gesture", ("instruction_dwell_right",), {}),
+        )
+        for label, target, keys, fields in messages:
+            with self.subTest(target=target, keys=keys):
+                app.set_message(target, *keys, **fields)
+                app.workspace.yview_moveto(0)
+                app.root.update()
+                probe = tk.Label(app.root, text=getattr(app, target).get(), font=label.cget("font"),
+                                 wraplength=label.cget("wraplength"), justify="left")
+                self.addCleanup(probe.destroy)
+                self.assertGreaterEqual(label.winfo_height(), probe.winfo_reqheight())
+                viewport_top = app.workspace.winfo_rooty()
+                viewport_height = app.workspace.winfo_height()
+                bottom = label.winfo_rooty() - viewport_top + label.winfo_height()
+                app.workspace.yview_moveto((bottom - viewport_height + 2) / app.workspace_body.winfo_height())
+                app.root.update()
+                visible_end = label.winfo_rooty() + label.winfo_height()
+                self.assertGreater(visible_end, viewport_top)
+                self.assertLessEqual(visible_end, viewport_top + viewport_height)
+                self.assert_widget_fits(app.camera_button, app.root)
+                self.assert_widget_fits(app.pointer_button, app.root)
+        self.assertEqual(mouse.mock_calls, [])
+
+    def test_wrapped_english_instructions_remain_readable_with_enlarged_text(self):
+        self.assert_wrapped_instructions_readable("en")
+
+    def test_wrapped_russian_instructions_remain_readable_with_enlarged_text(self):
+        self.assert_wrapped_instructions_readable("ru")
+
+    def test_short_status_changes_do_not_resize_the_spacious_practice_pad(self):
+        app, mouse = self.open_window(96, (1920, 1080), "en")
+        app.root.update()
+        initial = app.pad.winfo_rooty(), app.pad.winfo_height()
+        for key in ("status_opening", "hint_tracking", "hint_rearming"):
+            with self.subTest(key=key):
+                app.set_message("status", key)
+                app.root.update()
+                self.assertEqual((app.pad.winfo_rooty(), app.pad.winfo_height()), initial)
+        app.set_message("last_gesture", "gesture_preview_left")
+        app.root.update()
+        self.assertEqual((app.pad.winfo_rooty(), app.pad.winfo_height()), initial)
+        self.assertEqual(mouse.mock_calls, [])
+
     def test_large_text_keeps_footer_actions_and_tabbed_settings_reachable(self):
         for dpi in (288, 384):
             screens = ((800, 600), (1024, 768))

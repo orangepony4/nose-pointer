@@ -168,11 +168,7 @@ class PointerApp:
         self.recenter_button.grid(row=0, column=1, sticky="e")
         mode_header.bind("<Configure>", lambda event: self.resize_header(event, mode_label, self.recenter_button))
         self.status = tk.StringVar(value="")
-        self.status_label = tk.Label(frame, textvariable=self.status, font=("Segoe UI", 10),
-                                     bg=BACKGROUND, fg=INK, anchor="nw", justify="left",
-                                     wraplength=430, height=3)
-        self.status_label.pack(fill="x", pady=(4, 4))
-        self.status_label.bind("<Configure>", lambda event: self.status_label.configure(wraplength=event.width))
+        self.status_label = self.make_message_label(frame, self.status, INK, lines=3, padding=(4, 4))
         self.set_message("status", "status_welcome")
 
         self.pad = tk.Canvas(frame, bg=PAPER, width=400, height=48,
@@ -180,11 +176,7 @@ class PointerApp:
         self.pad.pack(fill="both", expand=True)
         self.pad.bind("<Configure>", self.draw_pad)
         self.last_gesture = tk.StringVar(value="")
-        gesture_label = tk.Label(frame, textvariable=self.last_gesture, font=("Segoe UI", 10),
-                                 bg=BACKGROUND, fg=MUTED, anchor="nw", justify="left",
-                                 wraplength=430, height=2)
-        gesture_label.pack(fill="x", pady=(8, 10))
-        gesture_label.bind("<Configure>", lambda event: gesture_label.configure(wraplength=event.width))
+        self.gesture_label = self.make_message_label(frame, self.last_gesture, MUTED, lines=2, padding=(8, 10))
 
         settings_controls = tk.Frame(frame, bg=BACKGROUND)
         settings_controls.pack(fill="x", pady=(0, 4))
@@ -578,6 +570,19 @@ class PointerApp:
         self.static_labels.append((label, key))
         return label
 
+    def make_message_label(self, parent, variable, foreground, *, lines, padding):
+        area = tk.Frame(parent, bg=BACKGROUND)
+        area.pack(fill="x", pady=padding)
+        area.columnconfigure(0, weight=1)
+        label = tk.Label(area, textvariable=variable, font=("Segoe UI", 10), bg=BACKGROUND,
+                         fg=foreground, anchor="nw", justify="left", wraplength=430, height=lines)
+        # Reserve room for brief updates while allowing longer messages to grow.
+        area.rowconfigure(0, minsize=label.winfo_reqheight())
+        label.configure(height=0)
+        label.grid(row=0, column=0, sticky="nsew")
+        label.bind("<Configure>", lambda event: label.configure(wraplength=event.width))
+        return label
+
     def set_message(self, target, *keys, **fields):
         self.messages[target] = (keys, fields)
         self.render_message(target)
@@ -587,9 +592,6 @@ class PointerApp:
         value = "\n".join(self.text(key, **fields) for key in keys)
         variable = getattr(self, target)
         if variable.get() != value:
-            if target == "status":
-                expand = "camera_error_detail" in keys or "safety_mouse_button" in keys
-                self.status_label.configure(height=0 if expand else 3)
             variable.set(value)
 
     def set_button(self, target, key, **options):
